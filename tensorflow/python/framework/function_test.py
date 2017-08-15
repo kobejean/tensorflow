@@ -30,6 +30,7 @@ from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import errors_impl
 from tensorflow.python.framework import function
+from tensorflow.python.framework import graph_to_function_def
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.ops import array_ops
@@ -504,7 +505,7 @@ class FunctionTest(test.TestCase):
 
       _ = PlusOne(1, name="p1")
       with self.assertRaisesRegexp(ValueError, "Unknown keyword arguments"):
-        _ = PlusOne(1, device="/gpu:0")
+        _ = PlusOne(1, device="/device:GPU:0")
 
   def testFunctionDecorator(self):
 
@@ -852,7 +853,7 @@ class FunctionTest(test.TestCase):
       uu = math_ops.reduce_sum(u)
       vv = math_ops.reduce_sum(v)
       result = ss + uu + vv
-    f = function._graph_to_function_def(
+    f = graph_to_function_def.graph_to_function_def(
         g,
         g.get_operations()[1:],  # skip the placeholder
         [s, u, v],

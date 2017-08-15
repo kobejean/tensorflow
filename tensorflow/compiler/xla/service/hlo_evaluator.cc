@@ -177,6 +177,29 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
         parent_->GetEvaluatedLiteralFor(broadcast->operand(0));
     std::vector<int64> broadcast_indices(
         ShapeUtil::Rank(broadcast->operand(0)->shape()), 0);
+
+    // Special case for broadcasting scalars: ignore broadcast dimension and
+    // broadcast to whatever the output dimension is.
+    // TODO(b/64533549): Remove the need of this once this bug is resolved.
+    if (ShapeUtil::IsScalar(operand_to_broadcast.shape())) {
+      return output->Populate<ReturnT>(
+          [&](tensorflow::gtl::ArraySlice<int64> multi_index) {
+            return operand_to_broadcast.Get<ReturnT>({});
+          });
+    }
+
+    TF_RET_CHECK(broadcast->dimensions().size() ==
+                 ShapeUtil::Rank(operand_to_broadcast.shape()))
+        << "broadcast dimensions is of size: " << broadcast->dimensions().size()
+        << " and rank of operand_to_broadcast is: "
+        << ShapeUtil::Rank(operand_to_broadcast.shape());
+    // Checks that operand's dimensions are the same as the broadcast's
+    // dimensions along the dimensions to be broadcasted.
+    for (int64 i = 0; i < broadcast->dimensions().size(); ++i) {
+      TF_RET_CHECK(broadcast->shape().dimensions(broadcast->dimensions(i)) ==
+                   operand_to_broadcast.shape().dimensions(i));
+    }
+
     return output->Populate<ReturnT>(
         [&](tensorflow::gtl::ArraySlice<int64> multi_index) {
           for (int64 i = 0; i < broadcast->dimensions().size(); ++i) {
@@ -184,20 +207,12 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
           }
           return operand_to_broadcast.Get<ReturnT>(broadcast_indices);
         });
-  }
+  };
 
   Status HandleCeil(HloInstruction* ceil, HloInstruction* operand) override {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[ceil],
                         ElementWiseUnaryOp(ceil, [](ReturnT elem_operand) {
                           return std::ceil(elem_operand);
-                        }));
-    return Status::OK();
-  };
-
-  Status HandleCopy(HloInstruction* copy) override {
-    TF_ASSIGN_OR_RETURN(parent_->evaluated_[copy],
-                        ElementWiseUnaryOp(copy, [](ReturnT elem_operand) {
-                          return elem_operand;
                         }));
     return Status::OK();
   };
@@ -399,6 +414,36 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
         };
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[select],
                         ElementWiseTernaryOp(select, std::move(select_op)));
+    return Status::OK();
+  };
+
+  Status HandleReverse(HloInstruction* reverse,
+                       HloInstruction* operand) override {
+    const auto result_shape = reverse->shape();
+    const auto reverse_dimensions = reverse->dimensions();
+
+    TF_ASSIGN_OR_RETURN(auto inferred_return_shape,
+                        ShapeInference::InferReverseShape(operand->shape(),
+                                                          reverse_dimensions));
+
+    TF_RET_CHECK(ShapeUtil::Compatible(result_shape, inferred_return_shape))
+        << "return shape set to: " << ShapeUtil::HumanString(result_shape)
+        << " but is inferred to be: "
+        << ShapeUtil::HumanString(inferred_return_shape);
+
+    auto operand_literal = parent_->GetEvaluatedLiteralFor(operand);
+    auto result = Literal::CreateFromShape(result_shape);
+
+    TF_RETURN_IF_ERROR(result->Populate<ReturnT>(
+        [&](tensorflow::gtl::ArraySlice<int64> out_index) {
+          std::vector<int64> from_index(out_index.begin(), out_index.end());
+          for (const int64 dim : reverse_dimensions) {
+            from_index[dim] = result_shape.dimensions(dim) - 1 - out_index[dim];
+          }
+          return operand_literal.Get<ReturnT>(from_index);
+        }));
+
+    parent_->evaluated_[reverse] = std::move(result);
     return Status::OK();
   };
 
@@ -855,8 +900,32 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
     return Status::OK();
   };
 
-  Status Preprocess(HloInstruction* hlo) override {
-    VLOG(2) << hlo->ToString();
+  Status HandleSlice(HloInstruction* slice, HloInstruction* operand) override {
+    const Shape& shape = slice->shape();
+    TF_ASSIGN_OR_RETURN(auto inferred_return_shape,
+                        ShapeInference::InferSliceShape(
+                            operand->shape(), slice->slice_starts(),
+                            slice->slice_limits(), slice->slice_strides()));
+    TF_RET_CHECK(ShapeUtil::Compatible(shape, inferred_return_shape))
+        << "return shape set to: " << ShapeUtil::HumanString(shape)
+        << " but is inferred to be: "
+        << ShapeUtil::HumanString(inferred_return_shape);
+
+    const int64 rank = ShapeUtil::Rank(operand->shape());
+    auto operand_literal = parent_->GetEvaluatedLiteralFor(operand);
+    auto func = [&](tensorflow::gtl::ArraySlice<int64> out_index) {
+      DimensionVector operand_index(rank);
+      for (int64 i = 0; i < rank; ++i) {
+        operand_index[i] =
+            slice->slice_starts(i) + out_index[i] * slice->slice_strides(i);
+      }
+      return operand_literal.Get<ReturnT>(operand_index);
+    };
+
+    auto result = Literal::CreateFromDimensions(
+        shape.element_type(), AsInt64Slice(shape.dimensions()));
+    TF_RETURN_IF_ERROR(result->Populate<ReturnT>(func));
+    parent_->evaluated_[slice] = std::move(result);
     return Status::OK();
   };
 
@@ -870,15 +939,21 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
     std::vector<int64> start(start_indices_typed.begin(),
                              start_indices_typed.end());
 
-    std::vector<int64> operand_indices(start.size(), 0);
+    std::vector<int64> operand_indices(start.size());
 
     auto result = Literal::CreateFromShape(result_shape);
     TF_RETURN_IF_ERROR(result->Populate<ReturnT>(
         [&](tensorflow::gtl::ArraySlice<int64> multi_index) {
-          std::transform(multi_index.begin(), multi_index.end(), start.begin(),
-                         operand_indices.begin(), std::plus<int64>());
+          for (int64 i = 0; i < operand_indices.size(); ++i) {
+            CHECK_GE(multi_index[i] + start[i], 0);
+            // Mod is only used here to be consistent with the existing
+            // backends' behavior.
+            operand_indices[i] = (multi_index[i] + start[i]) %
+                                 operand_literal.shape().dimensions(i);
+          }
 
-          return operand_literal.Get<ReturnT>(operand_indices);
+          auto result = operand_literal.Get<ReturnT>(operand_indices);
+          return result;
         }));
 
     return std::move(result);
@@ -1041,6 +1116,8 @@ StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate(
 StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate(
     const HloComputation& computation,
     tensorflow::gtl::ArraySlice<const Literal*> arg_literals) {
+  XLA_VLOG_LINES(
+      2, "HloEvaluator::Evaluate computation:\n" + computation.ToString());
   arg_literals_ = arg_literals;
   evaluated_.clear();
 
@@ -1071,7 +1148,9 @@ StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate(
     }
   }
 
+  TF_RETURN_IF_ERROR(Preprocess(instruction));
   TF_RETURN_IF_ERROR(instruction->Visit(this));
+  TF_RETURN_IF_ERROR(Postprocess(instruction));
   return MakeUnique<Literal>(GetEvaluatedLiteralFor(instruction));
 }
 
@@ -1083,7 +1162,10 @@ StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate(
 
   arg_literals_.clear();
   evaluated_.clear();
+
+  TF_RETURN_IF_ERROR(Preprocess(instruction));
   TF_RETURN_IF_ERROR(instruction->Visit(this));
+  TF_RETURN_IF_ERROR(Postprocess(instruction));
   return MakeUnique<Literal>(GetEvaluatedLiteralFor(instruction));
 }
 
@@ -1099,7 +1181,6 @@ std::unique_ptr<Literal> HloEvaluator::TryEvaluate(
 }
 
 Status HloEvaluator::HandleParameter(HloInstruction* parameter) {
-  VLOG(2) << "HandleParameter: " << parameter->ToString();
   const Literal* input_literal = arg_literals_[parameter->parameter_number()];
   VLOG(2) << "Parameter evaluated to: " << input_literal->ToString();
   DCHECK(ShapeUtil::Equal(parameter->shape(), input_literal->shape()));
@@ -1110,7 +1191,6 @@ Status HloEvaluator::HandleParameter(HloInstruction* parameter) {
 
 Status HloEvaluator::HandleConstant(HloInstruction* constant,
                                     const Literal& literal) {
-  VLOG(2) << "HandleConstant: " << constant->ToString();
   return Status::OK();
 }
 
@@ -1285,19 +1365,55 @@ Status HloEvaluator::HandleCompare(HloInstruction* compare, HloOpcode opcode,
   return Status::OK();
 }
 
-Status HloEvaluator::HandleSlice(HloInstruction* slice,
-                                 HloInstruction* operand) {
-  const Shape& shape = slice->shape();
-  auto literal = Literal::CreateFromDimensions(
-      shape.element_type(), AsInt64Slice(shape.dimensions()));
+Status HloEvaluator::HandleTuple(
+    HloInstruction* tuple,
+    tensorflow::gtl::ArraySlice<HloInstruction*> operands) {
+  std::vector<const Literal*> operand_literals;
+  for (auto operand : operands) {
+    operand_literals.push_back(&GetEvaluatedLiteralFor(operand));
+  }
 
-  DimensionVector dest_indices(slice->slice_starts().size(), 0);
+  evaluated_[tuple] = Literal::MakeTuple(operand_literals);
+  return Status::OK();
+}
 
-  TF_RETURN_IF_ERROR(literal->Copy(GetEvaluatedLiteralFor(operand),
-                                   slice->slice_starts(), dest_indices,
-                                   AsInt64Slice(shape.dimensions())));
+Status HloEvaluator::HandleGetTupleElement(HloInstruction* get_tuple_element,
+                                           HloInstruction* operand) {
+  const auto result_shape = get_tuple_element->shape();
+  const int64 index = get_tuple_element->tuple_index();
 
-  evaluated_[slice] = std::move(literal);
+  TF_ASSIGN_OR_RETURN(
+      auto inferred_return_shape,
+      ShapeInference::InferGetTupleElementShape(operand->shape(), index));
+  TF_RET_CHECK(ShapeUtil::Compatible(result_shape, inferred_return_shape))
+      << "return shape set to: " << ShapeUtil::HumanString(result_shape)
+      << " but is inferred to be: "
+      << ShapeUtil::HumanString(inferred_return_shape);
+
+  const Literal& operand_tuple_literal = GetEvaluatedLiteralFor(operand);
+
+  evaluated_[get_tuple_element] =
+      MakeUnique<Literal>(operand_tuple_literal.tuple_literals(index));
+
+  return Status::OK();
+}
+
+Status HloEvaluator::HandleCopy(HloInstruction* copy) {
+  TF_RET_CHECK(ShapeUtil::Compatible(copy->shape(), copy->operand(0)->shape()));
+
+  auto result = MakeUnique<Literal>(GetEvaluatedLiteralFor(copy->operand(0)));
+  evaluated_[copy] = std::move(result);
+  return Status::OK();
+}
+
+Status HloEvaluator::Preprocess(HloInstruction* hlo) {
+  VLOG(2) << "About to visit HLO: " << hlo->ToString();
+  return Status::OK();
+}
+
+Status HloEvaluator::Postprocess(HloInstruction* hlo) {
+  VLOG(2) << "Finished visiting " << hlo->ToString()
+          << "; evaluated value is: " << GetEvaluatedLiteralFor(hlo).ToString();
   return Status::OK();
 }
 
