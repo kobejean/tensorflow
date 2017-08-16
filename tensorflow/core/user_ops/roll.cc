@@ -21,23 +21,65 @@ class RollOp : public OpKernel {
 
   void Compute(OpKernelContext* context) override {
     // Grab the input tensor
-    const Tensor& input_tensor = context->input(0);
-    auto input = input_tensor.flat<int32>();
+    const Tensor& input = context->input(0);
+    const Tensor& shift = context->input(1);
+    const Tensor& axis = context->input(2);
 
-    // Create an output tensor
-    Tensor* output_tensor = NULL;
-    OP_REQUIRES_OK(context, context->allocate_output(0, input_tensor.shape(),
-                                                     &output_tensor));
-    auto output_flat = output_tensor->flat<int32>();
+    auto input_flat = input.flat<int32>();
+    auto shift_flat = shift.flat<int32>();
+    auto axis_flat = axis.flat<int32>();
 
-    // Set all but the first element of the output tensor to 0.
-    const int N = input.size();
-    for (int i = 1; i < N; i++) {
-      output_flat(i) = 0;
+    OP_REQUIRES(context, shift.shape().dims() <= 1,
+                errors::InvalidArgument("Roll expects a scalar or a 1-D vector for shift."));
+    OP_REQUIRES(context, axis.shape().dims() <= 1,
+                errors::InvalidArgument("Roll expects a scalar or a 1-D vector for axis."));
+    OP_REQUIRES(context, shift.shape() == axis.shape(),
+                errors::InvalidArgument("Roll expects shift and axis to be the same size."));
+
+    const int D = input.dims();
+    const int M = shift_flat.size();
+    const int N = input_flat.size();
+
+    int shifts[D];
+    for (int i = 0; i < D; i++) {
+        shifts[i] = 0;
+    }
+    for (int i = 0; i < M; i++) {
+        const int j = axis_flat(i);
+        OP_REQUIRES(context, j < D,
+                    errors::InvalidArgument("Roll expects axis to be in range."));
+        shifts[j] = shift_flat(i);
     }
 
-    // Preserve the first input value if possible.
-    if (N > 0) output_flat(0) = input(0);
+
+    int strides[D];
+    int last_stride = 1;
+    for (int i = D-1; i >= 0; i--) {
+        strides[i] = last_stride;
+        last_stride *= input.dim_size(i);
+    }
+
+    // Create an output tensor
+    Tensor* output = NULL;
+    OP_REQUIRES_OK(context, context->allocate_output(0, input.shape(),
+                                                     &output));
+    auto output_flat = output->flat<int32>();
+
+
+    // Compute.
+    for (int in_i = 0; in_i < N; in_i++) {
+        int out_i = in_i;
+        // loop through dimensions
+        for (int d = 0; d < D; d++) {
+            // find indices input/output for current dimension
+            const int in_dim_i = (in_i / strides[d]) % input.dim_size(d);
+            const int out_dim_i = (in_dim_i + shifts[d]) % input.dim_size(d);
+            // convert back to flat index
+            out_i += (out_dim_i - in_dim_i) * strides[d];
+        }
+
+        output_flat(out_i) = input_flat(in_i);
+    }
   }
 };
 
