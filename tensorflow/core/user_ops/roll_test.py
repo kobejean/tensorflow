@@ -114,6 +114,30 @@ class RollTest(tf.test.TestCase):
             with self.assertRaisesRegexp(InvalidArgumentError, "is out of range"):
                 roll_module.roll(tensor, shift, axis).eval()
 
+    # def testIntTypesGPU(self):
+    #     for t in [np.int32, np.int64]:
+    #         self._testAll(
+    #             np.random.randint(-100, 100, (5)).astype(t), 3, 0, use_gpu=True)
+    #         self._testAll(
+    #             np.random.randint(-100, 100, (4, 4, 3)).astype(t),
+    #             [1, -2, 3], [0, 1, 2], use_gpu=True)
+    #         self._testAll(
+    #             np.random.randint(-100, 100, (4, 2, 1, 3)).astype(t),
+    #             [0, 1, -2], [1, 2, 3], use_gpu=True)
+
+    def testFloatTypesGPU(self):
+        for t in [np.float32, np.float64]:
+            self._testAll(np.random.rand(5).astype(t), 2, 0, use_gpu=True)
+            self._testAll(np.random.rand(3, 4).astype(t), [1,2], [1,0], use_gpu=True)
+            self._testAll(np.random.rand(1, 3, 4).astype(t), [1,0,-3], [0,1,2], use_gpu=True)
+
+    # def testComplexTypesGPU(self):
+    #     for t in [np.complex64, np.complex128]:
+    #         x = np.random.rand(2, 5).astype(t)
+    #         self._testAll(x + 1j * x, [1,2], [1,0], use_gpu=True)
+    #         x = np.random.rand(3, 2, 1, 1).astype(t)
+    #         self._testAll(x + 1j * x, [2,1,1,0], [0,3,1,2], use_gpu=True)
+
 
 if __name__ == "__main__":
     tf.test.main()
