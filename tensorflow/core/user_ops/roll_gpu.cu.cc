@@ -3,7 +3,7 @@
 #define EIGEN_USE_GPU
 #define EIGEN_USE_THREADS
 
-#include "example.h"
+#include "roll.h"
 #include "tensorflow/core/util/cuda_kernel_helper.h"
 
 using namespace tensorflow;
@@ -14,7 +14,7 @@ using namespace tensorflow;
 template <typename T>
 __global__ void RollCudaKernel(int N, int D, int* dim_size, const T* input, T* output,\
                 const int* shifts, const int* strides) {
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < N; i += blockDim.x * gridDim.x) {
+    for (int in_i = blockIdx.x * blockDim.x + threadIdx.x; in_i < N; in_i += blockDim.x * gridDim.x) {
         int out_i = in_i;
         // loop through dimensions
         for (int d = 0; d < D; d++) {
@@ -33,7 +33,7 @@ __global__ void RollCudaKernel(int N, int D, int* dim_size, const T* input, T* o
 // Define the GPU implementation that launches the CUDA kernel.
 template <typename T>
 struct RollFunctor<GPUDevice, T> {
-    void operator()(const Device& d, int N, int D, int* dim_size, const T* input, T* output,\
+    void operator()(const GPUDevice& d, int N, int D, int* dim_size, const T* input, T* output,\
                     const int* shifts, const int* strides){
     // Launch the cuda kernel.
     //
