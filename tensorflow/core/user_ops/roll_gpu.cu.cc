@@ -42,7 +42,7 @@ struct RollFunctor<GPUDevice, T> {
     int block_count = 1024;
     int thread_per_block = 20;
     RollCudaKernel<T>
-        <<<block_count, thread_per_block, 0, d.stream()>>>(N, D, dim_size, input, T* output, shifts, strides);
+        <<<block_count, thread_per_block, 0, d.stream()>>>(N, D, dim_size, input, output, shifts, strides);
   }
 };
 
