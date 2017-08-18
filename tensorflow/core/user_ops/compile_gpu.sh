@@ -1,3 +1,4 @@
+#!/bin/bash
 TF_INC=$(python -c 'import tensorflow as tf; print(tf.sysconfig.get_include())')
 nvcc -std=c++11 -c -o roll_gpu.cu.o roll_gpu.cu.cc \
 -I $TF_INC -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC
