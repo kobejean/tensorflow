@@ -11,6 +11,7 @@ from tensorflow.python.ops import gradient_checker
 # g++ -std=c++11 -shared roll.cc -o roll.so -fPIC -I $TF_INC -O2 -undefined dynamic_lookup
 # python3 roll_test.py
 
+# roll_module = tf.load_op_library("/Users/kobejean/Developer/git/tensorflow/bazel-bin/tensorflow/core/user_ops/roll.so")
 roll_module = tf.load_op_library("./roll.so")
 
 @ops.RegisterGradient("Roll")

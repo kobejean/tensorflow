@@ -27,21 +27,20 @@ struct RollFunctor<CPUDevice, T> {
   void operator()(const CPUDevice& d, int N, int D, int* dim_size, const T* input, T* output, \
                   int* shifts, int* strides) {
 
-      for (int in_i = 0; in_i < N; in_i++) {
-          int out_i = in_i;
-          // loop through dimensions
-          for (int d = 0; d < D; d++) {
-              // find indices input/output for current dimension
-              const int ds = dim_size[d];
-              const int in_dim_i = (in_i / strides[d]) % ds;
-              const int out_dim_i = ((in_dim_i + shifts[d]) % ds + ds) % ds;
-
-              // convert back to flat index
-              out_i += (out_dim_i - in_dim_i) * strides[d];
-          }
-
-          output[out_i] = input[in_i];
+    for (int in_i = 0; in_i < N; in_i++) {
+      int out_i = in_i;
+      // loop through dimensions
+      for (int d = 0; d < D; d++) {
+        // find indices input/output for current dimension
+        const int ds = dim_size[d];
+        const int in_dim_i = (in_i / strides[d]) % ds;
+        const int out_dim_i = ((in_dim_i + shifts[d]) % ds + ds) % ds; // modulo that works with negatives
+        // convert back to flat index
+        out_i += (out_dim_i - in_dim_i) * strides[d];
       }
+
+      output[out_i] = input[in_i];
+    }
   }
 };
 
@@ -90,14 +89,11 @@ class RollOp : public OpKernel {
 
     int strides[D];
     int last_stride = 1;
+    int dim_size[D];
     for (int i = D-1; i >= 0; i--) {
         strides[i] = last_stride;
-        last_stride *= static_cast<int>(input.dim_size(i));
-    }
-
-    int dim_size[D];
-    for (int i = 0; i < D; i++) {
         dim_size[i] = static_cast<int>(input.dim_size(i));
+        last_stride *= static_cast<int>(input.dim_size(i));
     }
 
     Tensor* output = NULL;
@@ -180,6 +176,6 @@ REGISTER_KERNEL_BUILDER(Name("Roll")                              \
                           .TypeConstraint<int64>("Tshift")        \
                           .TypeConstraint<int64>("Taxis"),        \
                         RollOp<GPUDevice, type, int64, int64>)
-                        
+
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU)
 #endif  // GOOGLE_CUDA

@@ -3,19 +3,9 @@
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
-#include "roll.h"
+#include "roll_op.h"
 
 using namespace tensorflow;
-
-REGISTER_OP("Roll")
-        .Input("input: T")
-        .Input("shift: Tshift")
-        .Input("axis: Taxis")
-        .Output("output: T")
-        .Attr("T: type")
-        .Attr("Tshift: {int32,int64}")
-        .Attr("Taxis: {int32,int64}")
-    .SetShapeFn(::tensorflow::shape_inference::UnchangedShape);
 
 #define EIGEN_USE_THREADS
 using CPUDevice = Eigen::ThreadPoolDevice;
@@ -27,21 +17,20 @@ struct RollFunctor<CPUDevice, T> {
   void operator()(const CPUDevice& d, int N, int D, int* dim_size, const T* input, T* output, \
                   int* shifts, int* strides) {
 
-      for (int in_i = 0; in_i < N; in_i++) {
-          int out_i = in_i;
-          // loop through dimensions
-          for (int d = 0; d < D; d++) {
-              // find indices input/output for current dimension
-              const int ds = dim_size[d];
-              const int in_dim_i = (in_i / strides[d]) % ds;
-              const int out_dim_i = ((in_dim_i + shifts[d]) % ds + ds) % ds;
-
-              // convert back to flat index
-              out_i += (out_dim_i - in_dim_i) * strides[d];
-          }
-
-          output[out_i] = input[in_i];
+    for (int in_i = 0; in_i < N; in_i++) {
+      int out_i = in_i;
+      // loop through dimensions
+      for (int d = 0; d < D; d++) {
+        // find indices input/output for current dimension
+        const int ds = dim_size[d];
+        const int in_dim_i = (in_i / strides[d]) % ds;
+        const int out_dim_i = ((in_dim_i + shifts[d]) % ds + ds) % ds; // modulo that works with negatives
+        // convert back to flat index
+        out_i += (out_dim_i - in_dim_i) * strides[d];
       }
+
+      output[out_i] = input[in_i];
+    }
   }
 };
 
@@ -74,30 +63,23 @@ class RollOp : public OpKernel {
 
     const int D = static_cast<int>(input.dims());
     const int M = static_cast<int>(shift_flat.size());
-    // const int N = input_flat.size();
 
     int shifts[D];
-    for (int i = 0; i < D; i++) {
-        shifts[i] = 0;
-    }
+    for (int i = 0; i < D; i++) shifts[i] = 0; // default is 0
     for (int i = 0; i < M; i++) {
         const int j = axis_flat(i);
         OP_REQUIRES(context, j < D,
                     errors::InvalidArgument("axis ", j, " is out of range"));
-        shifts[j] = static_cast<int>(shift_flat(i));
-        // std::cout << "shift " << shifts[j] << '\n';
+        shifts[j] += static_cast<int>(shift_flat(i));
     }
 
     int strides[D];
     int last_stride = 1;
+    int dim_size[D];
     for (int i = D-1; i >= 0; i--) {
         strides[i] = last_stride;
-        last_stride *= static_cast<int>(input.dim_size(i));
-    }
-
-    int dim_size[D];
-    for (int i = 0; i < D; i++) {
         dim_size[i] = static_cast<int>(input.dim_size(i));
+        last_stride *= static_cast<int>(input.dim_size(i));
     }
 
     Tensor* output = NULL;
@@ -180,6 +162,6 @@ REGISTER_KERNEL_BUILDER(Name("Roll")                              \
                           .TypeConstraint<int64>("Tshift")        \
                           .TypeConstraint<int64>("Taxis"),        \
                         RollOp<GPUDevice, type, int64, int64>)
-                        
+
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU)
 #endif  // GOOGLE_CUDA
