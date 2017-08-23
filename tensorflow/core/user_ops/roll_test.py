@@ -72,7 +72,7 @@ class RollTest(tf.test.TestCase):
             self._testAll(x + 1j * x, [2,1,1,0], [0,3,1,2])
 
 
-    def testRollInputMustVectorHigherRaises(self):
+    def testRollInputMustBeVectorOrHigherRaises(self):
         tensor = 7
         shift = 1
         axis = 0
