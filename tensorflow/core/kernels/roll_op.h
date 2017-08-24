@@ -16,14 +16,11 @@ limitations under the License.
 #ifndef KERNEL_ROLL_H_
 #define KERNEL_ROLL_H_
 
-namespace tensorflow {
-
 template <typename Device, typename T>
 struct RollFunctor {
-    void operator()(const Device& d, int64 N, int D, int* dim_size,
+    void operator()(const Device& d, tensorflow::int64 N, int D, int* dim_size,
                     const T* input, T* output, const int* shifts,
-                    const int64* strides);
+                    const tensorflow::int64* strides);
 };
 
-}  // namespace tensorflow
 #endif //KERNEL_ROLL_H_
