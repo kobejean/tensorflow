@@ -100,6 +100,22 @@ TEST_F(RollOpTest, Simple_TwoD32) {
   test::ExpectTensorEqual<float>(expected, *GetOutput(0));
 }
 
+TEST_F(RollOpTest, Simple_ThreeD32) {
+  MakeOp(DT_FLOAT, DT_INT32);
+
+  // Feed and run
+  AddInputFromArray<float>(TensorShape({2, 2, 3}),
+                           {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
+  AddInputFromArray<int32>(TensorShape({3}), {1, -1, -1});
+  AddInputFromArray<int32>(TensorShape({3}), {0, 1, 2});
+  TF_ASSERT_OK(RunOpKernel());
+
+  // Check the output.
+  Tensor expected(allocator(), DT_FLOAT, TensorShape({2, 2, 3}));
+  test::FillValues<float>(&expected, {10, 11, 9, 7, 8, 6, 4, 5, 3, 1, 2, 0});
+  test::ExpectTensorEqual<float>(expected, *GetOutput(0));
+}
+
 TEST_F(RollOpTest, ZeroSize_TwoD32) {
   MakeOp(DT_FLOAT, DT_INT32);
 
@@ -130,7 +146,23 @@ TEST_F(RollOpTest, Simple_TwoD64) {
   test::ExpectTensorEqual<float>(expected, *GetOutput(0));
 }
 
-TEST_F(RollOpTest, DuplicateShifts) {
+TEST_F(RollOpTest, Simple_ThreeD64) {
+  MakeOp(DT_FLOAT, DT_INT64);
+
+  // Feed and run
+  AddInputFromArray<float>(TensorShape({2, 2, 3}),
+                           {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
+  AddInputFromArray<int64>(TensorShape({3}), {-1, 1, 2});
+  AddInputFromArray<int64>(TensorShape({3}), {0, 1, 2});
+  TF_ASSERT_OK(RunOpKernel());
+
+  // Check the output.
+  Tensor expected(allocator(), DT_FLOAT, TensorShape({2, 2, 3}));
+  test::FillValues<float>(&expected, {10, 11, 9, 7, 8, 6, 4, 5, 3, 1, 2, 0});
+  test::ExpectTensorEqual<float>(expected, *GetOutput(0));
+}
+
+TEST_F(RollOpTest, DuplicateShifts_TwoD32) {
   MakeOp(DT_FLOAT, DT_INT32);
 
   // Feed and run
