@@ -15,4 +15,3 @@ __pycache__
 .vscode/
 cmake_build/
 .idea/**
-tensorflow/core/user_ops/*.so
