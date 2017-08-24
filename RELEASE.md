@@ -34,7 +34,6 @@ See also [TensorBoard 0.1.4](https://github.com/tensorflow/tensorboard/releases/
 * GPU kernels and speed improvements for for unary `tf.where` and `tf.nn.top_k`.
 * Monotonic Attention wrappers added to `tf.contrib.seq2seq`.
 * Added `tf.contrib.signal`, a library for signal processing primitives.
-* Added `tf.contrib.resampler`, containing CPU and GPU ops for differentiable resampling of images.
 
 ## Breaking Changes to the API
 * `tf.RewriterConfig` was removed from the Python API after being available in 1.2 release candidates (it was never in an actual release). Graph rewriting is still available, just not as `tf.RewriterConfig`. Instead add an explicit import.
