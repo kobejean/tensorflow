@@ -215,12 +215,13 @@ static Graph* Roll(const TensorShape& shape) {
   Graph* g = new Graph(OpRegistry::Global());
   Tensor input(DT_FLOAT, shape);
   input.flat<float>().setRandom();
-  Tensor shift(DT_INT32, TensorShape({3}));
-  for (int i = 0; i < 3; i++) {
-    shift.flat<int32>()(i) = (i - 1) * 2 + 1;
+  const int D = 2;
+  Tensor shift(DT_INT32, TensorShape({D}));
+  for (int i = 0; i < D; i++) {
+    shift.flat<int32>()(i) = 2;
   }
-  Tensor axis(DT_INT32, TensorShape({3}));
-  for (int i = 0; i < 3; i++) {
+  Tensor axis(DT_INT32, TensorShape({D}));
+  for (int i = 0; i < D; i++) {
     axis.flat<int32>()(i) = i;
   }
   test::graph::Roll(g, test::graph::Constant(g, input),
@@ -240,14 +241,12 @@ static Graph* Roll(const TensorShape& shape) {
   }                                                                            \
   BENCHMARK(BM_##DEVICE##_roll)                                                \
       ->ArgPair(256, 256)                                                      \
-      ->ArgPair(512, 256)                                                      \
       ->ArgPair(256, 512)                                                      \
+      ->ArgPair(512, 256)                                                      \
       ->ArgPair(512, 512)                                                      \
-      ->ArgPair(512, 1024)                                                     \
       ->ArgPair(1024, 512)                                                     \
+      ->ArgPair(512, 1024)                                                     \
       ->ArgPair(1024, 1024)                                                    \
-      ->ArgPair(1024, 8192)                                                    \
-      ->ArgPair(8192, 1024)
 
 BM_ROLL(cpu);
 BM_ROLL(gpu);
