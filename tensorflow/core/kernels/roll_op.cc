@@ -37,7 +37,7 @@ void DoRoll(OpKernelContext* context, const int64 N,
   auto work = [input, output, D, &dim_size,
                &threshold, &dim_range](int64 start, int64 end) {
     int indices[D]; // array of indices for each dimension
-    int offset = 0; // the shift along the flat tensor for current element
+    int offset = 0; // the shift along the flattened tensor for current element
     // initialize indices and offset
     for (int d = 0; d < D; d++) {
       // stride is the number of indices over in the flattened tensor
@@ -95,103 +95,89 @@ void DoRollV2(OpKernelContext* context, const int64 N,
     in_ptr += start;
     out_ptr += start;
 
-    // int64 fake_i = start;
-    // std::cout << "fake_i_1 " << fake_i << '\n';
-
-    int indicies[D]; // array of indices for each dimension
-    // initialize indicies and delta_i
-    int64 rem_offset = 0;
+    // array of indices for each dimension
+    // indicies = [i, j, k, l, m, n]
+    int indicies[D];
+    // the offset needed to make all inner non-shifting dimensions become 0
+    int64 remainder_offset = 0;
+    // initialize indicies
     for (int d = 0; d < D; d++) {
       // stride is the number of indices over in the flattened tensor
       // you need to skip in order to make it over to an adjacent element
       // along a dimension.
       const int64 stride = dim_range[d] / dim_size[d];
-      // calculated this way will always be positive modulo of shift
       const int shift = dim_size[d] - threshold[d];
       const int indx = (start / stride) % dim_size[d];
       indicies[d] = indx;
       // calculate dimension index after the shift
-      int out_indx = (d > isd) ? 0 : (indx + shift) % dim_size[d];
+      int out_indx = (indx + shift) % dim_size[d];
       if (d > isd) {
-        rem_offset += (out_indx - indx) * stride;
+        // trailing zeroes for indices after the inner shifted dimension
+        out_indx = 0;
+        remainder_offset += (out_indx - indx) * stride;
       }
       out_ptr += (out_indx - indx) * stride;
-      // fake_i += (out_indx - indx) * stride;
     }
-
+    // set trailing zeroes for indices after the inner shifted dimension
     for (int d = D-1; d > isd; d--) indicies[d] = 0;
-
+    // the distance along the flattend tensor to the next element in the isd
     const int64 isd_stride = dim_range[isd] / dim_size[isd];
 
-    int group_isd_stride = 0;
+    // the number of indices in the isd dimension the next group will skip
+    // to make it to the next threshold or end point
+    int isd_indx_skip = 0;
+    // the size of the next group
     int64 group_size = 0;
+    // initialize isd_indx_skip and group_size
     if (indicies[isd] < threshold[isd]){
-      group_isd_stride = threshold[isd] - indicies[isd];
-      group_size = group_isd_stride * isd_stride + rem_offset;
+      isd_indx_skip = threshold[isd] - indicies[isd];
+      group_size = isd_indx_skip * isd_stride + remainder_offset;
     }else{
-      group_isd_stride = dim_size[isd] - indicies[isd];
-      group_size = group_isd_stride * isd_stride + rem_offset;
+      isd_indx_skip = dim_size[isd] - indicies[isd];
+      group_size = isd_indx_skip * isd_stride + remainder_offset;
     }
-    // std::cout << "rem_offset" << rem_offset << '\n';
-    // std::cout << "group_isd_stride" << group_isd_stride << '\n';
-    // std::cout << "group_size" << group_size << '\n';
-
-    // std::cout << "fake_i_2 " << fake_i << '\n';
 
     int64 i = start;
     while (i < end){
-
+      // copy group of elements
       memcpy(out_ptr, in_ptr, group_size * sizeof(T));
+
+      // shift i and the pointers over to the next group position
       i += group_size;
       out_ptr += group_size;
       in_ptr += group_size;
 
-      // fake_i += group_size;
-
-      // std::cout << "fake_i_3 " << fake_i << '\n';
-
-      // create next combination of indicies[d]
-      // while at it adjust delta_i if needed
-      int isd_indx = (indicies[isd] + group_isd_stride) % dim_size[isd];
-      indicies[isd] = isd_indx;
-      if (isd_indx != 0) {
-        if (isd_indx == threshold[isd]) {
-          out_ptr -= dim_range[isd]; // now wraps around
-          // fake_i -= dim_range[isd];
-          // std::cout << "fake_i_4 " << fake_i << '\n';
-        }
-      }else{
-        out_ptr += dim_range[isd]; // indx became 0 so reverse wrap around
-        // fake_i += dim_range[isd];
-        // std::cout << "fake_i_5 " << fake_i << '\n';
-      }
-      if (isd_indx == 0) {
-        for (int d = isd - 1; d >= 0; d--) {
-          const int indx = (indicies[d] + 1) % dim_size[d];
-          indicies[d] = indx;
-          if (indx != 0) {
-            if (indx == threshold[d]) {
-              out_ptr -= dim_range[d]; // now wraps around
-              // fake_i -= dim_range[d];
-              // std::cout << "fake_i_6 " << fake_i << '\n';
-            }
-            break; // indx != 0 don't need to carry
-          }else{
-            out_ptr += dim_range[d]; // indx became 0 so reverse wrap around
-            // fake_i += dim_range[d];
-            // std::cout << "fake_i_7 " << fake_i << '\n';
+      // produce next combination of indices and adjust the out_ptr position
+      // to fix the offset if necessary
+      // the isd should skip to next threshold or endpoint
+      // all dimensions to the left increment by 1 when a digit is carried
+      // all dimensions to the right remain set to 0
+      //            +1 +1 +1 +isd_indx_skip
+      // indicies = [i, j, k, l, 0, 0]
+      //                      ^isd
+      for (int d = isd; d >= 0; d--) {
+        int inc = 1;
+        if (d == isd) inc = isd_indx_skip;
+        const int indx = (indicies[d] + inc) % dim_size[d];
+        indicies[d] = indx;
+        if (indx != 0) {
+          if (indx == threshold[d]) {
+            out_ptr -= dim_range[d]; // now wraps around
           }
+          break; // indx != 0 don't need to carry
+        }else{
+          out_ptr += dim_range[d]; // indx became 0 so reverse wrap around
         }
       }
 
+      // set isd_indx_skip and group_size for next iteration
       if (indicies[isd] < threshold[isd]){
-        group_isd_stride = threshold[isd] - indicies[isd];
-        group_size = group_isd_stride * isd_stride;
+        isd_indx_skip = threshold[isd] - indicies[isd];
+        group_size = isd_indx_skip * isd_stride;
       }else{
-        group_isd_stride = dim_size[isd] - indicies[isd];
-        group_size = group_isd_stride * isd_stride;
+        isd_indx_skip = dim_size[isd] - indicies[isd];
+        group_size = isd_indx_skip * isd_stride;
       }
-
 
     }
   };
@@ -245,15 +231,17 @@ class RollOp : public OpKernel {
       // modulo that works with negatives: ((x % y) + y) % y
       shift_mod_sum[a] = (sum % ds + ds) % ds;
     }
-
+    // the size of each dimension
     int dim_size[D];
-    int threshold[D]; // the index that the roll starts to wrap around
+    // threshold[d] is the index that the roll starts to wrap back to the front
+    int threshold[D];
     // dim_range is the number of indices over in the flattened tensor
     // you need to skip in order to make it over from one side of a dimension
     // to the other. Used to make the shifts wrap around after a threshold.
     int64 dim_range[D];
     int64 dim_size_prod = 1;
-    int64 isd = 0;// inner shift dimension (inner most shifted dimension)
+    // inner shift dimension (inner most shifted dimension)
+    int64 isd = 0;
     for (int d = D-1; d >= 0; d--) {
       if (!isd && shift_mod_sum[d]) isd = d;
       const int ds = fmax(static_cast<int>(input.dim_size(d)), 1);
@@ -273,13 +261,16 @@ class RollOp : public OpKernel {
     if (std::is_same<Device, CPUDevice>::value) {
       if (DataTypeCanUseMemcpy(DataTypeToEnum<T>::v())){
         // V2 copies memory in groups instead of element by element
+        // much faster
         DoRollV2<T>(context, N, D, dim_size, input_flat, output_flat,
                        threshold, dim_range, isd);
       }else{
+        // incase memcpy does not work for current data type
         DoRoll<T>(context, N, D, dim_size, input_flat, output_flat,
                        threshold, dim_range);
       }
-    }else{ // GPUs and beyond
+    }else{
+      // for GPUs and beyond
       RollFunctor<Device, T>()(context->eigen_device<Device>(), N, D, dim_size,
                                input_flat, output_flat, threshold, dim_range);
     }
