@@ -27,9 +27,9 @@ namespace tensorflow {
 
 // CUDA kernel.
 template <typename T>
-__global__ void RollCudaKernel(int64 N, int D, int* dim_size, const T* input,
-                               T* output, const int* threshold,
-                               const int64* dim_range) {
+__global__ void RollCudaKernel(const int64 N, const int D, int* dim_size,
+                               const T* input, T* output, int* threshold,
+                               int64* dim_range) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
@@ -76,9 +76,8 @@ __global__ void RollCudaKernel(int64 N, int D, int* dim_size, const T* input,
 // GPU implementation that launches the CUDA kernel.
 template <typename T>
 struct RollFunctor<GPUDevice, T> {
-  void operator()(const GPUDevice& d, int64 N, int D, int* dim_size,
-                  const T* input, T* output, const int* threshold,
-                  const int64* dim_range) {
+  void operator()(const GPUDevice& d, const int64 N, const int D, int* dim_size,
+                  const T* input, T* output, int* threshold, int64* dim_range) {
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
     RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
