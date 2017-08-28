@@ -49,7 +49,7 @@ __global__ void RollCudaKernel(int64 N, int D, int* dim_size, const T* input,
     offset += (shifted_indx - indx) * stride;
   }
 
-  CUDA_1D_KERNEL_LOOP(start, end) {
+  for (int i = start; i < end; i += blockDim.x * gridDim.x) {
     output[i + offset] = input[i];
     // create next combination of indices
     // while at it adjust offset if needed
@@ -79,7 +79,7 @@ struct RollFunctor<GPUDevice, T> {
   void operator()(const GPUDevice& d, int64 N, int D, int* dim_size,
                   const T* input, T* output, const int* threshold,
                   const int64* dim_range) {
-    CudaLaunchConfig config = GetCudaLaunchConfig(out_size, d);
+    CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
     RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             N, D, dim_size, input, output, threshold, dim_range);
