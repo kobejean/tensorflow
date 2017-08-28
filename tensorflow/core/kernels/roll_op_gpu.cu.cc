@@ -21,7 +21,7 @@ limitations under the License.
 #include "roll_op.h"
 #include "tensorflow/core/util/cuda_kernel_helper.h"
 
-using namespace tensorflow;
+namespace tensorflow {
 
 #define EIGEN_USE_GPU
 
@@ -93,5 +93,7 @@ typedef Eigen::GpuDevice GPUDevice;
 #define DEFINE_GPU_SPECS(T)                  \
   template struct RollFunctor<GPUDevice, T>; \
   TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
+
+}  // namespace tensorflow
 
 #endif  // GOOGLE_CUDA
