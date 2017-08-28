@@ -16,20 +16,20 @@ limitations under the License.
 #ifdef GOOGLE_CUDA
 
 #define EIGEN_USE_GPU
-#define EIGEN_USE_THREADS
 
 #include "roll_op.h"
 #include "tensorflow/core/util/cuda_kernel_helper.h"
 
 namespace tensorflow {
 
-#define EIGEN_USE_GPU
+typedef Eigen::GpuDevice GPUDevice;
 
+namespace {
 // CUDA kernel.
 template <typename T>
-__global__ void RollCudaKernel(int64 N, int D, int* dim_size,
+__global__ void RollCudaKernel(tensorflow::int64 N, int D, int* dim_size,
                                const T* input, T* output, int* threshold,
-                               int64* dim_range) {
+                               tensorflow::int64* dim_range) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
@@ -73,11 +73,15 @@ __global__ void RollCudaKernel(int64 N, int D, int* dim_size,
   }
 }
 
+}  // namespace
+
+namespace functor {
 // GPU implementation that launches the CUDA kernel.
 template <typename T>
 struct RollFunctor<GPUDevice, T> {
-  void operator()(const GPUDevice& d, int64 N, int D, int* dim_size,
-                  const T* input, T* output, int* threshold, int64* dim_range) {
+  void operator()(const GPUDevice& d, tensorflow::int64 N, int D, int* dim_size,
+                  const T* input, T* output, int* threshold,
+                  tensorflow::int64* dim_range) {
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
     RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
@@ -85,14 +89,14 @@ struct RollFunctor<GPUDevice, T> {
   }
 };
 
-// Instantiate functors for the types of OpKernels registered.
-typedef Eigen::GpuDevice GPUDevice;
-
 // Definition of the GPU implementations declared in roll_op.h.
 #define DEFINE_GPU_SPECS(T)                  \
   template struct RollFunctor<GPUDevice, T>; \
   TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
 
+#undef DEFINE_GPU_SPECS
+
+}  // namespace functor
 }  // namespace tensorflow
 
 #endif  // GOOGLE_CUDA

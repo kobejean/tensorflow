@@ -19,13 +19,16 @@ limitations under the License.
 #include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
+namespace functor {
 
 template <typename Device, typename T>
 struct RollFunctor {
-  void operator()(const Device& d, int64 N, int D, int* dim_size,
-                  const T* input, T* output, int* threshold, int64* dim_range);
+  void operator()(const Device& d, tensorflow::int64 N, int D, int* dim_size,
+                  const T* input, T* output, int* threshold,
+                  tensorflow::int64* dim_range);
 };
 
+}  // namespace functor
 }  // namespace tensorflow
 
 #endif  // KERNEL_ROLL_H_

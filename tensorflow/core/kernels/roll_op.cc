@@ -269,7 +269,7 @@ class RollOp : public OpKernel {
       }
     } else {
       // for GPUs
-      RollFunctor<Device, T>()(context->eigen_device<Device>(), N, D, dim_size,
+      functor::RollFunctor<Device, T>()(context->eigen_device<Device>(), N, D, dim_size,
                                input_flat, output_flat, threshold, dim_range);
     }
   }
