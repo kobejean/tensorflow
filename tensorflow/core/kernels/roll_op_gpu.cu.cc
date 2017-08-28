@@ -77,7 +77,7 @@ __global__ void RollCudaKernel(int64 N, int D, int* dim_size, const T* input,
 template <typename T>
 struct RollFunctor<GPUDevice, T> {
   void operator()(const GPUDevice& d, int64 N, int D, int* dim_size,
-                  const T* input, T* output const int* threshold,
+                  const T* input, T* output, const int* threshold,
                   const int64* dim_range) {
     CudaLaunchConfig config = GetCudaLaunchConfig(out_size, d);
     RollCudaKernel<T>
