@@ -27,9 +27,9 @@ typedef Eigen::GpuDevice GPUDevice;
 namespace {
 // CUDA kernel.
 template <typename T>
-__global__ void RollCudaKernel(tensorflow::int64 N, int D, int* dim_size,
+__global__ void RollCudaKernel(int N, int D, int* dim_size,
                                const T* input, T* output, int* threshold,
-                               tensorflow::int64* dim_range) {
+                               int* dim_range) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
@@ -79,9 +79,9 @@ namespace functor {
 // GPU implementation that launches the CUDA kernel.
 template <typename T>
 struct RollFunctor<GPUDevice, T> {
-  void operator()(const GPUDevice& d, tensorflow::int64 N, int D, int* dim_size,
+  void operator()(const GPUDevice& d, int N, int D, int* dim_size,
                   const T* input, T* output, int* threshold,
-                  tensorflow::int64* dim_range) {
+                  int* dim_range) {
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
     RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(

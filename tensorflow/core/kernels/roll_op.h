@@ -23,9 +23,9 @@ namespace functor {
 
 template <typename Device, typename T>
 struct RollFunctor {
-  void operator()(const Device& d, tensorflow::int64 N, int D, int* dim_size,
+  void operator()(const Device& d, int N, int D, int* dim_size,
                   const T* input, T* output, int* threshold,
-                  tensorflow::int64* dim_range);
+                  int* dim_range);
 };
 
 }  // namespace functor
