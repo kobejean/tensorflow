@@ -274,7 +274,7 @@ class RollOp : public OpKernel {
         dim_range_32[d] = static_cast<int>(dim_range[d]);
       }
 
-      const DD = D;
+      const int DD = D;
 
       functor::RollFunctor<Device, T>()(context->eigen_device<Device>(), N, DD, dim_size,
                                input_flat, output_flat, threshold, dim_range_32);
