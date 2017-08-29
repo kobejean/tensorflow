@@ -91,10 +91,12 @@ struct RollFunctor<GPUDevice, T> {
 
 // Definition of the GPU implementations declared in roll_op.h.
 #define DEFINE_GPU_SPECS(T)                  \
-  template struct RollFunctor<GPUDevice, T>; \
-#undef DEFINE_GPU_SPECS
+  template struct RollFunctor<GPUDevice, T>;
 
 TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
+
+#undef DEFINE_GPU_SPECS
+
 
 
 }  // namespace functor
