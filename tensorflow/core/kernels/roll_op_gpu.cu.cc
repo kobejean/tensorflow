@@ -18,6 +18,7 @@ limitations under the License.
 #define EIGEN_USE_GPU
 
 #include "roll_op.h"
+#include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/util/cuda_kernel_helper.h"
 
 namespace tensorflow {
@@ -90,12 +91,12 @@ struct RollFunctor<GPUDevice, T> {
 };
 
 // Definition of the GPU implementations declared in roll_op.h.
-#define DEFINE_GPU_SPECS(T)                  \
+#define DEFINE_GPU_SPEC(T)                  \
   template struct RollFunctor<GPUDevice, T>;
 
-TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
+TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPEC);
 
-#undef DEFINE_GPU_SPECS
+#undef DEFINE_GPU_SPEC
 
 
 
