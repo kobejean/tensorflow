@@ -30,11 +30,11 @@ namespace {
 template <typename T>
 __global__ void RollCudaKernel(const int N, const int D, const int* dim_size,
                                const T* input, T* output, const int* threshold,
-                               const int* dim_range, int* indices) {
+                               const int* dim_range) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
-  // int indices[D];  // array of indices for each dimension
+  int indices[2];  // array of indices for each dimension
   int offset = 0;  // the shift along the flat tensor for current element
   // initialize indices and offset
   for (int d = 0; d < D; d++) {
@@ -82,11 +82,11 @@ template <typename T>
 struct RollFunctor<GPUDevice, T> {
   void operator()(const GPUDevice& d, const int N, const int D,
                   const int* dim_size, const T* input, T* output,
-                  const int* threshold, const int* dim_range, int* indices) {
+                  const int* threshold, const int* dim_range) {
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
     RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            N, D, dim_size, input, output, threshold, dim_range, indices);
+            N, D, dim_size, input, output, threshold, dim_range);
   }
 };
 

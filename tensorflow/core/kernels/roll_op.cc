@@ -274,10 +274,10 @@ class RollOp : public OpKernel {
         dim_range_32[d] = static_cast<int>(dim_range[d]);
       }
 
-      int indices[D];  // array of indices for each dimension
+      // int indices[D];  // array of indices for each dimension
 
       functor::RollFunctor<Device, T>()(context->eigen_device<Device>(), N, D, dim_size,
-                               input_flat, output_flat, threshold, dim_range_32, indices);
+                               input_flat, output_flat, threshold, dim_range_32);
     }
   }
 };
