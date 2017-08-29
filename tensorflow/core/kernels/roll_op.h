@@ -25,7 +25,7 @@ template <typename Device, typename T>
 struct RollFunctor {
   void operator()(const Device& d, const int N, const int D, const int* dim_size,
                   const T* input, T* output, const int* threshold,
-                  const int* dim_range);
+                  const int* dim_range, int* indices);
 };
 
 }  // namespace functor
