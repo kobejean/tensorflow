@@ -80,9 +80,9 @@ namespace functor {
 // GPU implementation that launches the CUDA kernel.
 template <typename T>
 struct RollFunctor<GPUDevice, T> {
-  void operator()(const GPUDevice& d, int N, int D, int* dim_size,
-                  const T* input, T* output, int* threshold,
-                  int* dim_range) {
+  void operator()(const GPUDevice& d, const int N, const int D,
+                  const int* dim_size, const T* input, T* output,
+                  const int* threshold, const int* dim_range) {
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
     RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
