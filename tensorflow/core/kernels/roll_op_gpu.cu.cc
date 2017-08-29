@@ -28,9 +28,9 @@ typedef Eigen::GpuDevice GPUDevice;
 namespace {
 // CUDA kernel.
 template <typename T>
-__global__ void RollCudaKernel(int N, int D, int* dim_size,
-                               const T* input, T* output, int* threshold,
-                               int* dim_range) {
+__global__ void RollCudaKernel(const int N, const int D, const int* dim_size,
+                               const T* input, T* output, const int* threshold,
+                               const int* dim_range) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
