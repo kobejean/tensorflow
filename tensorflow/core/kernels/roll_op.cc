@@ -196,10 +196,6 @@ class RollOp : public OpKernel {
     const Tensor& shift = context->input(1);
     const Tensor& axis = context->input(2);
 
-    // auto input_flat = input.flat<T>();
-    auto shift_flat = shift.flat<Tshift>();
-    auto axis_flat = axis.flat<Taxis>();
-
     OP_REQUIRES(context, TensorShapeUtils::IsVectorOrHigher(input.shape()),
                 errors::InvalidArgument("input must be 1-D or higher"));
     OP_REQUIRES(context, shift.shape().dims() <= 1,
@@ -213,6 +209,9 @@ class RollOp : public OpKernel {
     OP_REQUIRES(
         context, shift.shape() == axis.shape(),
         errors::InvalidArgument("shift and axis must be the same size"));
+
+    auto shift_flat = shift.flat<Tshift>();
+    auto axis_flat = axis.flat<Taxis>();
     const int64 N = input.NumElements();
     const int M = static_cast<int>(shift_flat.size());
     const int D = static_cast<int>(input.dims());
@@ -255,7 +254,7 @@ class RollOp : public OpKernel {
     auto input_flat = input.flat<T>().data();
     auto output_flat = output->flat<T>().data();
 
-    if (std::is_same<Device, CPUDevice>::value || N > kint32max) {
+    if (std::is_same<Device, CPUDevice>::value || N > kint32max || D > 8) {
       // if N > kint32max this is too large for GPUs so we'll use CPU
       if (DataTypeCanUseMemcpy(DataTypeToEnum<T>::v())) {
         // V2 copies memory in groups instead of element by element
@@ -269,15 +268,26 @@ class RollOp : public OpKernel {
       }
     } else {
       // for GPUs
-      int dim_range_32[D];
-      for (int d = 0; d < D; d++){
-        dim_range_32[d] = static_cast<int>(dim_range[d]);
-      }
 
       // int indices[D];  // array of indices for each dimension
+#define ROLL_FUNCTOR(Dims)                                                    \
+  case Dims:                                                                  \
+    functor::RollFunctor<Device, T, Dims>()(context->eigen_device<Device>(),  \
+                                      input, shift, axis, output);            \
+    return;
 
-      functor::RollFunctor<Device, T>()(context->eigen_device<Device>(), N, D, dim_size,
-                               input_flat, output_flat, threshold, dim_range_32);
+      switch (D) {
+        ROLL_FUNCTOR(0);
+        ROLL_FUNCTOR(1);
+        ROLL_FUNCTOR(2);
+        ROLL_FUNCTOR(3);
+        ROLL_FUNCTOR(4);
+        ROLL_FUNCTOR(5);
+        ROLL_FUNCTOR(6);
+        ROLL_FUNCTOR(7);
+        ROLL_FUNCTOR(8);
+      }
+#undef ROLL_FUNCTOR
     }
   }
 };
