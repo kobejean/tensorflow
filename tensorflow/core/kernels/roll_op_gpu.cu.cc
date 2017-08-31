@@ -86,7 +86,7 @@ struct RollFunctor<GPUDevice, T, Dims> {
                   tensorflow::Tensor* output) {
     auto shift_flat = shift.flat<Tshift>();
     auto axis_flat = axis.flat<Taxis>();
-    const int64 N = input.NumElements();
+    const tensorflow::int64 N = input.NumElements();
     const int M = static_cast<int>(shift_flat.size());
     const int D = static_cast<int>(input.dims());
 
@@ -109,10 +109,10 @@ struct RollFunctor<GPUDevice, T, Dims> {
     // dim_range is the number of indices over in the flattened tensor
     // you need to skip in order to make it over from one side of a dimension
     // to the other. Used to make the shifts wrap around after a threshold.
-    int64 dim_range[D];
-    int64 dim_size_prod = 1;
+    tensorflow::int64 dim_range[D];
+    tensorflow::int64 dim_size_prod = 1;
     // inner shift dimension (inner most shifted dimension)
-    int64 isd = 0;
+    tensorflow::int64 isd = 0;
     for (int d = D - 1; d >= 0; d--) {
       if (!isd && shift_mod_sum[d]) isd = d;
       const int ds = fmax(static_cast<int>(input.dim_size(d)), 1);
