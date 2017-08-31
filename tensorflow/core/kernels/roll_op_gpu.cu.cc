@@ -90,7 +90,7 @@ struct RollFunctor<GPUDevice, T, Dims> {
     const int M = static_cast<int>(shift_flat.size());
     const int D = static_cast<int>(input.dims());
 
-    int shift_mod_sum[D];  // if any duplicate axes, will sum corresponding
+    int shift_mod_sum[Dims];  // if any duplicate axes, will sum corresponding
                            // shifts
     for (int d = 0; d < D; d++) shift_mod_sum[d] = 0;  // default is 0
     for (int m = 0; m < M; m++) {
@@ -103,13 +103,13 @@ struct RollFunctor<GPUDevice, T, Dims> {
       shift_mod_sum[a] = (sum % ds + ds) % ds;
     }
     // the size of each dimension
-    int dim_size[D];
+    int dim_size[Dims];
     // threshold[d] is the index that the roll starts to wrap back to the front
-    int threshold[D];
+    int threshold[Dims];
     // dim_range is the number of indices over in the flattened tensor
     // you need to skip in order to make it over from one side of a dimension
     // to the other. Used to make the shifts wrap around after a threshold.
-    tensorflow::int64 dim_range[D];
+    tensorflow::int64 dim_range[Dims];
     tensorflow::int64 dim_size_prod = 1;
     // inner shift dimension (inner most shifted dimension)
     tensorflow::int64 isd = 0;
