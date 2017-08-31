@@ -271,24 +271,9 @@ class RollOp : public OpKernel {
       // for GPUs
 
       // int indices[D];  // array of indices for each dimension
-#define ROLL_FUNCTOR(Dims)                                                    \
-  case Dims: {                                                                \
-    functor::RollFunctor<Device, T, Tshift, Taxis, Dims> func;                               \
-    func(context->eigen_device<Device>(), input, shift, axis, output);        \
-    } break
-
-      switch (D) {
-        ROLL_FUNCTOR(0);
-        ROLL_FUNCTOR(1);
-        ROLL_FUNCTOR(2);
-        // ROLL_FUNCTOR(3);
-        // ROLL_FUNCTOR(4);
-        // ROLL_FUNCTOR(5);
-        // ROLL_FUNCTOR(6);
-        // ROLL_FUNCTOR(7);
-        // ROLL_FUNCTOR(8);
-      }
-#undef ROLL_FUNCTOR
+      functor::RollFunctor<Device, T> func;
+      func(context->eigen_device<Device>(), N, D, dim_size, input_flat,
+           output_flat, threshold, dim_range);
     }
   }
 };

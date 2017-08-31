@@ -78,67 +78,21 @@ __global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_s
 
 namespace functor {
 // GPU implementation that launches the CUDA kernel.
-template <typename T, typename Tshift, typename Taxis, int Dims>
-struct RollFunctor<GPUDevice, T, Tshift, Taxis, Dims> {
-  void operator()(const GPUDevice& d, const tensorflow::Tensor input,
-                  const tensorflow::Tensor shift,
-                  const tensorflow::Tensor axis,
-                  tensorflow::Tensor* output) {
-    auto shift_flat = shift.flat<Tshift>();
-    auto axis_flat = axis.flat<Taxis>();
-    const tensorflow::int64 N = input.NumElements();
-    const int M = static_cast<int>(shift_flat.size());
-    const int D = static_cast<int>(input.dims());
-
-    int shift_mod_sum[Dims];  // if any duplicate axes, will sum corresponding
-                           // shifts
-    for (int d = 0; d < D; d++) shift_mod_sum[d] = 0;  // default is 0
-    for (int m = 0; m < M; m++) {
-      const int a = axis_flat(m);
-      const int ds = max(static_cast<int>(input.dim_size(a)), 1);
-      const int sum = shift_mod_sum[a] + static_cast<int>(shift_flat(m));
-      // modulo that works with negatives: ((x % y) + y) % y
-      shift_mod_sum[a] = (sum % ds + ds) % ds;
-    }
-    // the size of each dimension
-    int dim_size[Dims];
-    // threshold[d] is the index that the roll starts to wrap back to the front
-    int threshold[Dims];
-    // dim_range is the number of indices over in the flattened tensor
-    // you need to skip in order to make it over from one side of a dimension
-    // to the other. Used to make the shifts wrap around after a threshold.
-    tensorflow::int64 dim_range[Dims];
-    tensorflow::int64 dim_size_prod = 1;
-    // inner shift dimension (inner most shifted dimension)
-    tensorflow::int64 isd = 0;
-    for (int d = D - 1; d >= 0; d--) {
-      if (!isd && shift_mod_sum[d]) isd = d;
-      const int ds = max(static_cast<int>(input.dim_size(d)), 1);
-      dim_size[d] = ds;
-      threshold[d] = (ds - shift_mod_sum[d]) % ds;
-      dim_size_prod *= static_cast<int64>(input.dim_size(d));
-      dim_range[d] = dim_size_prod;
-    }
-    auto input_flat = input.flat<T>().data();
-    auto output_flat = output->flat<T>().data();
+template <typename T>
+struct RollFunctor<GPUDevice, T> {
+  void operator()(const GPUDevice& d, const tensorflow::int64 N, const int D, int dim_size[ ],
+                                 const T* input, T* output, int threshold[ ],
+                                 tensorflow::int64 dim_range[ ]) {
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
     RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            N, D, dim_size, input_flat, output_flat, threshold, dim_range);
+            N, D, dim_size, input, output, threshold, dim_range);
   }
 };
 
 // Definition of the GPU implementations declared in roll_op.h.
-#define DEFINE_GPU_SPEC_TYPE_DIMS(T, Dims)                                 \
-  template struct RollFunctor<GPUDevice, T, int32, int32, Dims>; \
-  template struct RollFunctor<GPUDevice, T, int32, int64, Dims>; \
-  template struct RollFunctor<GPUDevice, T, int64, int32, Dims>; \
-  template struct RollFunctor<GPUDevice, T, int64, int64, Dims>;
-
-#define DEFINE_GPU_SPECS(T)            \
-  DEFINE_GPU_SPEC_TYPE_DIMS(T, 0);     \
-  DEFINE_GPU_SPEC_TYPE_DIMS(T, 1);     \
-  DEFINE_GPU_SPEC_TYPE_DIMS(T, 2);     \
+#define DEFINE_GPU_SPECS(T)                 \
+  template struct RollFunctor<GPUDevice, T>;
 
 TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
 
