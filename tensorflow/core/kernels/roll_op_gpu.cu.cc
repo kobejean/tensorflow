@@ -27,10 +27,10 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 // CUDA kernel.
-template <typename T>
-__global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_size[ ],
-                               const T* input, T* output, int threshold[ ],
-                               tensorflow::int64 dim_range[ ]) {
+template <typename T, Dims>
+__global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_size[Dims],
+                               const T* input, T* output, int threshold[Dims],
+                               tensorflow::int64 dim_range[Dims]) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
@@ -80,12 +80,12 @@ namespace functor {
 // GPU implementation that launches the CUDA kernel.
 template <typename T, int Dims>
 struct RollFunctor<GPUDevice, T, Dims> {
-  void operator()(const GPUDevice& d, const tensorflow::int64 N, const int D, int dim_size[ ],
+  void operator()(const GPUDevice& d, const tensorflow::int64 N, const int D, int dim_size[Dims],
                   typename TTypes<T, Dims>::ConstTensor input,
-                  typename TTypes<T, Dims>::Tensor output, int threshold[ ],
-                                 tensorflow::int64 dim_range[ ]) {
+                  typename TTypes<T, Dims>::Tensor output, int threshold[Dims],
+                                 tensorflow::int64 dim_range[Dims]) {
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
-    RollCudaKernel<T>
+    RollCudaKernel<T, Dims>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             N, D, dim_size, input.data(), output.data(), threshold, dim_range);
   }
@@ -93,7 +93,7 @@ struct RollFunctor<GPUDevice, T, Dims> {
 
 // Definition of the GPU implementations declared in roll_op.h.
 #define DEFINE_GPU_SPEC_TYPE_DIMS(T, Dims)                                 \
-  template struct RollFunctor<GPUDevice, T, Dims>; 
+  template struct RollFunctor<GPUDevice, T, Dims>;
 
 #define DEFINE_GPU_SPECS(T)            \
   DEFINE_GPU_SPEC_TYPE_DIMS(T, 0);     \
