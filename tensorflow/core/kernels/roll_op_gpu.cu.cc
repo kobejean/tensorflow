@@ -30,7 +30,7 @@ namespace {
 template <typename T, Dims>
 __global__ void RollCudaKernel(const int N, const int D, const int dim_size[Dims],
                                const T* input, T* output, const int threshold[Dims],
-                               const int dim_range[Dims]) {
+                               const tensorflow::int64 dim_range[Dims]) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
