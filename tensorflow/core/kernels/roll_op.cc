@@ -273,7 +273,7 @@ class RollOp : public OpKernel {
       // int indices[D];  // array of indices for each dimension
 #define ROLL_FUNCTOR(Dims)                                                    \
   case Dims: {                                                                \
-    functor::RollFunctor<Device, T, Dims> func;                               \
+    functor::RollFunctor<Device, T, Tshift, Taxis, Dims> func;                               \
     func(context->eigen_device<Device>(), input, shift, axis, output);        \
     } break
 

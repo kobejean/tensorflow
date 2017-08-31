@@ -21,7 +21,7 @@ limitations under the License.
 namespace tensorflow {
 namespace functor {
 
-template <typename Device, typename T, int Dims>
+template <typename Device, typename T, typename Tshift, typename Taxis, int Dims>
 struct RollFunctor {
   void operator()(const Device& d, const tensorflow::Tensor input,
                   const tensorflow::Tensor shift,
