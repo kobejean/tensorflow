@@ -132,10 +132,10 @@ struct RollFunctor<GPUDevice, T, Dims> {
 
 // Definition of the GPU implementations declared in roll_op.h.
 #define DEFINE_GPU_SPEC_TYPE_DIMS(T, Dims)                                 \
-  template struct RollFunctor<GPUDevice, T, int32, int32, Dims>; \
-  template struct RollFunctor<GPUDevice, T, int32, int64, Dims>; \
-  template struct RollFunctor<GPUDevice, T, int64, int32, Dims>; \
-  template struct RollFunctor<GPUDevice, T, int64, int64, Dims>;
+  template struct RollFunctor<GPUDevice, T, Dims>; \
+  template struct RollFunctor<GPUDevice, T, Dims>; \
+  template struct RollFunctor<GPUDevice, T, Dims>; \
+  template struct RollFunctor<GPUDevice, T, Dims>;
 
 #define DEFINE_GPU_SPECS(T)            \
   DEFINE_GPU_SPEC_TYPE_DIMS(T, 0);     \
