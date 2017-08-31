@@ -27,10 +27,10 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 // CUDA kernel.
-template <typename T, Dims>
-__global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_size[Dims],
-                               const T* input, T* output, int threshold[Dims],
-                               tensorflow::int64 dim_range[Dims]) {
+template <typename T>
+__global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_size[ ],
+                               const T* input, T* output, int threshold[ ],
+                               tensorflow::int64 dim_range[ ]) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
@@ -124,7 +124,7 @@ struct RollFunctor<GPUDevice, T, Dims> {
     auto input_flat = input.flat<T>().data();
     auto output_flat = output->flat<T>().data();
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
-    RollCudaKernel<T, Dims>
+    RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             N, D, dim_size, input_flat, output_flat, threshold, dim_range);
   }
