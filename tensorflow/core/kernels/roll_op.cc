@@ -19,6 +19,7 @@ limitations under the License.
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/register_types_traits.h"
+#include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/util/work_sharder.h"
 
@@ -271,21 +272,21 @@ class RollOp : public OpKernel {
 
       // int indices[D];  // array of indices for each dimension
 #define ROLL_FUNCTOR(Dims)                                                    \
-  case Dims:                                                                  \
-    functor::RollFunctor<Device, T, Dims>()(context->eigen_device<Device>(),  \
-                                      input, shift, axis, output);            \
-    return;
+  case Dims: {                                                                \
+    functor::RollFunctor<Device, T, Dims> func;                               \
+    func(context->eigen_device<Device>(), input, shift, axis, output);        \
+    } break
 
       switch (D) {
         ROLL_FUNCTOR(0);
         ROLL_FUNCTOR(1);
         ROLL_FUNCTOR(2);
-        ROLL_FUNCTOR(3);
-        ROLL_FUNCTOR(4);
-        ROLL_FUNCTOR(5);
-        ROLL_FUNCTOR(6);
-        ROLL_FUNCTOR(7);
-        ROLL_FUNCTOR(8);
+        // ROLL_FUNCTOR(3);
+        // ROLL_FUNCTOR(4);
+        // ROLL_FUNCTOR(5);
+        // ROLL_FUNCTOR(6);
+        // ROLL_FUNCTOR(7);
+        // ROLL_FUNCTOR(8);
       }
 #undef ROLL_FUNCTOR
     }
