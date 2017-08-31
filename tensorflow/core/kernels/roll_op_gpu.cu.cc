@@ -27,10 +27,10 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 // CUDA kernel.
-template <typename T, Dims>
-__global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_size[Dims],
-                               const T* input, T* output, int threshold[Dims],
-                               tensorflow::int64 dim_range[Dims]) {
+template <typename T>
+__global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_size[ ],
+                               const T* input, T* output, int threshold[ ],
+                               tensorflow::int64 dim_range[ ]) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
@@ -80,14 +80,25 @@ namespace functor {
 // GPU implementation that launches the CUDA kernel.
 template <typename T, int Dims>
 struct RollFunctor<GPUDevice, T, Dims> {
-  void operator()(const GPUDevice& d, const tensorflow::int64 N, const int D, int dim_size[Dims],
+  void operator()(const GPUDevice& d, const tensorflow::int64 N, const int D, int dim_size[ ],
                   typename TTypes<T, Dims>::ConstTensor input,
-                  typename TTypes<T, Dims>::Tensor output, int threshold[Dims],
-                                 tensorflow::int64 dim_range[Dims]) {
+                  typename TTypes<T, Dims>::Tensor output, int threshold[ ],
+                                 tensorflow::int64 dim_range[ ]) {
+    int dim_size_cpy[Dims];
+    int threshold_cpy[Dims];
+    tensorflow::int64 dim_range_cpy[Dims];
+    for (int d=0; d < Dims; d++) {
+      std::cout << "d:" << dim_size[d] << '\n';
+      dim_size_cpy[d] = dim_size[d];
+      threshold_cpy[d] = threshold[d];
+      dim_range_cpy[d] = dim_range[d];
+    }
+
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
-    RollCudaKernel<T, Dims>
+    RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            N, D, dim_size, input.data(), output.data(), threshold, dim_range);
+            N, D, dim_size_cpy, input.data(), output.data(), threshold_cpy,
+            dim_range_cpy);
   }
 };
 
