@@ -1092,6 +1092,12 @@ tf_kernel_library(
     ],
 )
 
+# Unlike gather_functor library, this does not include the CUDA code and deps.
+cc_library(
+    name = "gather_functor_hdr",
+    hdrs = ["gather_functor.h"],
+)
+
 tf_kernel_library(
     name = "dense_update_functor",
     srcs = ["dense_update_functor.cc"],
@@ -1827,6 +1833,7 @@ cc_library(
         ":draw_bounding_box_op",
         ":encode_jpeg_op",
         ":encode_png_op",
+        ":extract_jpeg_shape_op",
         ":non_max_suppression_op",
         ":random_crop_op",
         ":resize_area_op",
@@ -1857,16 +1864,22 @@ tf_kernel_library(
     deps = IMAGE_DEPS,
 )
 
+cc_library(
+    name = "adjust_hsv_gpu_lib",
+    hdrs = ["adjust_hsv_gpu.cu.h"],
+    deps = ["//tensorflow/core:framework"],
+)
+
 tf_kernel_library(
     name = "adjust_hue_op",
     prefix = "adjust_hue_op",
-    deps = IMAGE_DEPS,
+    deps = IMAGE_DEPS + [":adjust_hsv_gpu_lib"],
 )
 
 tf_kernel_library(
     name = "adjust_saturation_op",
     prefix = "adjust_saturation_op",
-    deps = IMAGE_DEPS,
+    deps = IMAGE_DEPS + [":adjust_hsv_gpu_lib"],
 )
 
 tf_kernel_library(
@@ -1914,6 +1927,12 @@ tf_kernel_library(
 tf_kernel_library(
     name = "encode_png_op",
     prefix = "encode_png_op",
+    deps = IMAGE_DEPS,
+)
+
+tf_kernel_library(
+    name = "extract_jpeg_shape_op",
+    prefix = "extract_jpeg_shape_op",
     deps = IMAGE_DEPS,
 )
 
@@ -4665,6 +4684,7 @@ filegroup(
             "decode_image_op.*",
             "encode_png_op.*",
             "encode_jpeg_op.*",
+            "extract_jpeg_shape_op.*",
             "decode_jpeg_op.*",
             "decode_gif_op.*",
             "identity_reader_op.*",
@@ -4675,6 +4695,7 @@ filegroup(
             "sample_distorted_bounding_box_op.*",
             "ctc_loss_op.*",
             "spectrogram_convert_test_data.cc",
+            "sql_dataset_ops.cc",
             # Excluded due to experimental status:
             "debug_ops.*",
             "scatter_nd_op*",
@@ -5573,6 +5594,7 @@ cc_library(
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
         "//tensorflow/core:lib_internal",
+        "//tensorflow/core/util/tensor_bundle",
     ],
 )
 
@@ -5882,6 +5904,28 @@ tf_kernel_library(
 )
 
 tf_kernel_library(
+    name = "sql_dataset_ops",
+    srcs = [
+        "sql/driver_manager.cc",
+        "sql/sqlite_query_connection.cc",
+        "sql_dataset_ops.cc",
+    ],
+    hdrs = [
+        "sql/driver_manager.h",
+        "sql/query_connection.h",
+        "sql/sqlite_query_connection.h",
+    ],
+    deps = [
+        ":dataset",
+        "//tensorflow/core:dataset_ops_op_lib",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:lib_internal",
+        "@sqlite_archive//:sqlite",
+    ],
+)
+
+tf_kernel_library(
     name = "iterator_ops",
     srcs = ["iterator_ops.cc"],
     deps = [
@@ -5931,6 +5975,7 @@ tf_kernel_library(
         ":shuffle_dataset_op",
         ":skip_dataset_op",
         ":sparse_tensor_slice_dataset_op",
+        ":sql_dataset_ops",
         ":take_dataset_op",
         ":tensor_dataset_op",
         ":tensor_slice_dataset_op",
