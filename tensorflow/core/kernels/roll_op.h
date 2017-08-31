@@ -16,15 +16,18 @@ limitations under the License.
 #ifndef KERNEL_ROLL_H_
 #define KERNEL_ROLL_H_
 
+#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
+#include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/framework/types.h"
 
 namespace tensorflow {
 namespace functor {
 
-template <typename Device, typename T>
+template <typename Device, typename T, int Dims>
 struct RollFunctor {
   void operator()(const Device& d, const tensorflow::int64 N, const int D,
-                  int dim_size[ ], const T* input, T* output, int threshold[ ],
+                  int dim_size[ ], typename TTypes<T, Dims>::ConstTensor input,
+                  typename TTypes<T, Dims>::Tensor output, int threshold[ ],
                   tensorflow::int64 dim_range[ ]);
 };
 

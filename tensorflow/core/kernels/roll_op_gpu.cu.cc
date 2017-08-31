@@ -78,21 +78,30 @@ __global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_s
 
 namespace functor {
 // GPU implementation that launches the CUDA kernel.
-template <typename T>
-struct RollFunctor<GPUDevice, T> {
+template <typename T, int Dims>
+struct RollFunctor<GPUDevice, T, Dims> {
   void operator()(const GPUDevice& d, const tensorflow::int64 N, const int D, int dim_size[ ],
-                                 const T* input, T* output, int threshold[ ],
+                  typename TTypes<T, Dims>::ConstTensor input,
+                  typename TTypes<T, Dims>::Tensor output, int threshold[ ],
                                  tensorflow::int64 dim_range[ ]) {
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
     RollCudaKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            N, D, dim_size, input, output, threshold, dim_range);
+            N, D, dim_size, input.data(), output.data(), threshold, dim_range);
   }
 };
 
 // Definition of the GPU implementations declared in roll_op.h.
-#define DEFINE_GPU_SPECS(T)                 \
-  template struct RollFunctor<GPUDevice, T>;
+#define DEFINE_GPU_SPEC_TYPE_DIMS(T, Dims)                                 \
+  template struct RollFunctor<GPUDevice, T, Dims>; \
+  template struct RollFunctor<GPUDevice, T, Dims>; \
+  template struct RollFunctor<GPUDevice, T, Dims>; \
+  template struct RollFunctor<GPUDevice, T, Dims>;
+
+#define DEFINE_GPU_SPECS(T)            \
+  DEFINE_GPU_SPEC_TYPE_DIMS(T, 0);     \
+  DEFINE_GPU_SPEC_TYPE_DIMS(T, 1);     \
+  DEFINE_GPU_SPEC_TYPE_DIMS(T, 2);     \
 
 TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
 
