@@ -95,9 +95,7 @@ struct RollFunctor<GPUDevice, T, Tshift, Taxis, Dims> {
     for (int d = 0; d < D; d++) shift_mod_sum[d] = 0;  // default is 0
     for (int m = 0; m < M; m++) {
       const int a = axis_flat(m);
-      OP_REQUIRES(context, a < D,
-                  errors::InvalidArgument("axis ", a, " is out of range"));
-      const int ds = fmax(static_cast<int>(input.dim_size(a)), 1);
+      const int ds = max(static_cast<int>(input.dim_size(a)), 1);
       const int sum = shift_mod_sum[a] + static_cast<int>(shift_flat(m));
       // modulo that works with negatives: ((x % y) + y) % y
       shift_mod_sum[a] = (sum % ds + ds) % ds;
@@ -115,7 +113,7 @@ struct RollFunctor<GPUDevice, T, Tshift, Taxis, Dims> {
     tensorflow::int64 isd = 0;
     for (int d = D - 1; d >= 0; d--) {
       if (!isd && shift_mod_sum[d]) isd = d;
-      const int ds = fmax(static_cast<int>(input.dim_size(d)), 1);
+      const int ds = max(static_cast<int>(input.dim_size(d)), 1);
       dim_size[d] = ds;
       threshold[d] = (ds - shift_mod_sum[d]) % ds;
       dim_size_prod *= static_cast<int64>(input.dim_size(d));
