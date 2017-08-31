@@ -78,8 +78,8 @@ __global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_s
 
 namespace functor {
 // GPU implementation that launches the CUDA kernel.
-template <typename T, int Dims>
-struct RollFunctor<GPUDevice, T, Dims> {
+template <typename T, typename Tshift, typename Taxis, int Dims>
+struct RollFunctor<GPUDevice, T, Tshift, Taxis, Dims> {
   void operator()(const GPUDevice& d, const tensorflow::Tensor input,
                   const tensorflow::Tensor shift,
                   const tensorflow::Tensor axis,
@@ -132,10 +132,10 @@ struct RollFunctor<GPUDevice, T, Dims> {
 
 // Definition of the GPU implementations declared in roll_op.h.
 #define DEFINE_GPU_SPEC_TYPE_DIMS(T, Dims)                                 \
-  template struct RollFunctor<GPUDevice, T, Dims>; \
-  template struct RollFunctor<GPUDevice, T, Dims>; \
-  template struct RollFunctor<GPUDevice, T, Dims>; \
-  template struct RollFunctor<GPUDevice, T, Dims>;
+  template struct RollFunctor<GPUDevice, T, int32, int32, Dims>; \
+  template struct RollFunctor<GPUDevice, T, int32, int64, Dims>; \
+  template struct RollFunctor<GPUDevice, T, int64, int32, Dims>; \
+  template struct RollFunctor<GPUDevice, T, int64, int64, Dims>;
 
 #define DEFINE_GPU_SPECS(T)            \
   DEFINE_GPU_SPEC_TYPE_DIMS(T, 0);     \
