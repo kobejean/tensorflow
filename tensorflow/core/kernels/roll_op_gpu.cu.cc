@@ -27,14 +27,16 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 // CUDA kernel.
-template <typename T>
-__global__ void RollCudaKernel(const tensorflow::int64 N, const int D, int dim_size[ ],
-                               const T* input, T* output, int threshold[ ],
-                               tensorflow::int64 dim_range[ ]) {
+template <typename T, int Dims>
+__global__ void RollCudaKernel(const tensorflow::int64 N, const int D,
+                               const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_size,
+                               const T* input, T* output,
+                               const Eigen::DSizes<Eigen::DenseIndex, Dims>& threshold,
+                               const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_range) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
-  int indices[2];  // array of indices for each dimension
+  int indices[Dims];  // array of indices for each dimension
   int offset = 0;  // the shift along the flat tensor for current element
   // initialize indices and offset
   for (int d = 0; d < D; d++) {
@@ -80,25 +82,18 @@ namespace functor {
 // GPU implementation that launches the CUDA kernel.
 template <typename T, int Dims>
 struct RollFunctor<GPUDevice, T, Dims> {
-  void operator()(const GPUDevice& d, const tensorflow::int64 N, const int D, int dim_size[ ],
+  void operator()(const GPUDevice& d, const tensorflow::int64 N, const int D,
+                  const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_size,
                   typename TTypes<T, Dims>::ConstTensor input,
-                  typename TTypes<T, Dims>::Tensor output, int threshold[ ],
-                                 tensorflow::int64 dim_range[ ]) {
-    int dim_size_cpy[Dims];
-    int threshold_cpy[Dims];
-    tensorflow::int64 dim_range_cpy[Dims];
-    for (int d=0; d < Dims; d++) {
-      std::cout << "d:" << dim_size[d] << '\n';
-      dim_size_cpy[d] = dim_size[d];
-      threshold_cpy[d] = threshold[d];
-      dim_range_cpy[d] = dim_range[d];
-    }
+                  typename TTypes<T, Dims>::Tensor output,
+                  const Eigen::DSizes<Eigen::DenseIndex, Dims>& threshold,
+                  const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_range) {
 
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
-    RollCudaKernel<T>
+    RollCudaKernel<T, Dims>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            N, D, dim_size_cpy, input.data(), output.data(), threshold_cpy,
-            dim_range_cpy);
+            N, D, dim_size, input.data(), output.data(), threshold,
+            dim_range);
   }
 };
 
@@ -110,6 +105,12 @@ struct RollFunctor<GPUDevice, T, Dims> {
   DEFINE_GPU_SPEC_TYPE_DIMS(T, 0);     \
   DEFINE_GPU_SPEC_TYPE_DIMS(T, 1);     \
   DEFINE_GPU_SPEC_TYPE_DIMS(T, 2);     \
+  DEFINE_GPU_SPEC_TYPE_DIMS(T, 3);     \
+  DEFINE_GPU_SPEC_TYPE_DIMS(T, 4);     \
+  DEFINE_GPU_SPEC_TYPE_DIMS(T, 5);     \
+  DEFINE_GPU_SPEC_TYPE_DIMS(T, 6);     \
+  DEFINE_GPU_SPEC_TYPE_DIMS(T, 7);     \
+  DEFINE_GPU_SPEC_TYPE_DIMS(T, 8);     \
 
 TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
 

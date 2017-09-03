@@ -198,7 +198,7 @@ class RollOp : public OpKernel {
     const Tensor& axis = context->input(2);
 
     OP_REQUIRES(context, TensorShapeUtils::IsVectorOrHigher(input.shape()),
-                errors::InvalidArgument("input must be 1-D or higher"));
+                errors::InvalidArgument("input must be 1-D or higher."));
     OP_REQUIRES(context, shift.shape().dims() <= 1,
                 errors::InvalidArgument(
                     "shift must be a scalar or a 1-D vector. Found: ",
@@ -210,6 +210,12 @@ class RollOp : public OpKernel {
     OP_REQUIRES(
         context, shift.shape() == axis.shape(),
         errors::InvalidArgument("shift and axis must be the same size"));
+
+    OP_REQUIRES(context, shift.dtype() == DT_INT32 || shift.dtype() == DT_INT64,
+                errors::InvalidArgument("shift must be int32 or int64."));
+
+    OP_REQUIRES(context, axis.dtype() == DT_INT32 || axis.dtype() == DT_INT64,
+                errors::InvalidArgument("axis must be int32 or int64."));
 
     auto shift_flat = shift.flat<Tshift>();
     auto axis_flat = axis.flat<Taxis>();
@@ -270,26 +276,32 @@ class RollOp : public OpKernel {
     } else {
       // for GPUs
 
-      // int indices[D];  // array of indices for each dimension
-
 #define ROLL_FUNCTOR(Dims)                                                    \
   case Dims: {                                                                \
+    Eigen::DSizes<Eigen::DenseIndex, Dims> _dim_size;                         \
+    Eigen::DSizes<Eigen::DenseIndex, Dims> _threshold;                        \
+    Eigen::DSizes<Eigen::DenseIndex, Dims> _dim_range;                        \
+    for (int d = 0; d < D; d++) {                                             \
+      _dim_size[d] = dim_size[d];                                             \
+      _threshold[d] = threshold[d];                                           \
+      _dim_range[d] = dim_range[d];                                           \
+    }                                                                         \
     functor::RollFunctor<Device, T, Dims> func;                               \
-    func(context->eigen_device<Device>(), N, D, dim_size,                     \
-         input.tensor<T, Dims>(), output->tensor<T, Dims>(), threshold,       \
-         dim_range);                              \
+    func(context->eigen_device<Device>(), N, D, _dim_size,                    \
+         input.tensor<T, Dims>(), output->tensor<T, Dims>(), _threshold,      \
+         _dim_range);                                                         \
   } break
 
       switch (D) {
         ROLL_FUNCTOR(0);
         ROLL_FUNCTOR(1);
         ROLL_FUNCTOR(2);
-        // ROLL_FUNCTOR(3);
-        // ROLL_FUNCTOR(4);
-        // ROLL_FUNCTOR(5);
-        // ROLL_FUNCTOR(6);
-        // ROLL_FUNCTOR(7);
-        // ROLL_FUNCTOR(8);
+        ROLL_FUNCTOR(3);
+        ROLL_FUNCTOR(4);
+        ROLL_FUNCTOR(5);
+        ROLL_FUNCTOR(6);
+        ROLL_FUNCTOR(7);
+        ROLL_FUNCTOR(8);
       }
 #undef ROLL_FUNCTOR
     }

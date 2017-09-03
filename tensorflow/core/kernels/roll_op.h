@@ -26,9 +26,11 @@ namespace functor {
 template <typename Device, typename T, int Dims>
 struct RollFunctor {
   void operator()(const Device& d, const tensorflow::int64 N, const int D,
-                  int dim_size[ ], typename TTypes<T, Dims>::ConstTensor input,
-                  typename TTypes<T, Dims>::Tensor output, int threshold[ ],
-                  tensorflow::int64 dim_range[ ]);
+                  const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_size,
+                  typename TTypes<T, Dims>::ConstTensor input,
+                  typename TTypes<T, Dims>::Tensor output,
+                  const Eigen::DSizes<Eigen::DenseIndex, Dims>& threshold,
+                  const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_range);
 };
 
 }  // namespace functor
