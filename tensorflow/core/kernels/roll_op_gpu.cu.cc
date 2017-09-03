@@ -33,9 +33,9 @@ __global__ void RollCudaKernel(const tensorflow::int64 N, const int D,
                                const T* input, T* output,
                                const Eigen::DSizes<Eigen::DenseIndex, Dims>& threshold,
                                const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_range) {
-  std::cout << "dim_size[0]:" << dim_size[0] << '\n';
-  std::cout << "threshold[0]:" << threshold[0] << '\n';
-  std::cout << "dim_range[0]:" << dim_range[0] << '\n';
+  // std::cout << "dim_size[0]:" << dim_size[0] << '\n';
+  // std::cout << "threshold[0]:" << threshold[0] << '\n';
+  // std::cout << "dim_range[0]:" << dim_range[0] << '\n';
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
