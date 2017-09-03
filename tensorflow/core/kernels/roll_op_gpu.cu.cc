@@ -29,10 +29,10 @@ namespace {
 // CUDA kernel.
 template <typename T, int Dims>
 __global__ void RollCudaKernel(const tensorflow::int64 N, const int D,
-                               const int[] dim_size,
+                               int[] dim_size,
                                const T* input, T* output,
-                               const int[] threshold,
-                               const int[] dim_range) {
+                               int[] threshold,
+                               int[] dim_range) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
