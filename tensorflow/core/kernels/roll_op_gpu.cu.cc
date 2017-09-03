@@ -33,6 +33,9 @@ __global__ void RollCudaKernel(const tensorflow::int64 N, const int D,
                                const T* input, T* output,
                                const Eigen::DSizes<Eigen::DenseIndex, Dims>& threshold,
                                const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_range) {
+  std::cout << "dim_size[0]:" << dim_size[0] << '\n';
+  std::cout << "threshold[0]:" << threshold[0] << '\n';
+  std::cout << "dim_range[0]:" << dim_range[0] << '\n';
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
@@ -88,12 +91,19 @@ struct RollFunctor<GPUDevice, T, Dims> {
                   typename TTypes<T, Dims>::Tensor output,
                   const Eigen::DSizes<Eigen::DenseIndex, Dims>& threshold,
                   const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_range) {
-
+    __shared__ Eigen::DSizes<Eigen::DenseIndex, Dims> _dim_size;
+    __shared__ Eigen::DSizes<Eigen::DenseIndex, Dims> _threshold;
+    __shared__ Eigen::DSizes<Eigen::DenseIndex, Dims> _dim_range;
+    for (int d = 0; d < Dims; d++) {
+      _dim_size[d] = dim_size[d];
+      _threshold[d] = threshold[d];
+      _dim_range[d] = dim_range[d];
+    }
     CudaLaunchConfig config = GetCudaLaunchConfig(N, d);
     RollCudaKernel<T, Dims>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            N, D, dim_size, input.data(), output.data(), threshold,
-            dim_range);
+            N, D, _dim_size, input.data(), output.data(), _threshold,
+            _dim_range);
   }
 };
 
