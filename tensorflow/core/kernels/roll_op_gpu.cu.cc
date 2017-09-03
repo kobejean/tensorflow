@@ -29,13 +29,10 @@ namespace {
 // CUDA kernel.
 template <typename T, int Dims>
 __global__ void RollCudaKernel(const tensorflow::int64 N, const int D,
-                               const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_size,
+                               const int[] dim_size,
                                const T* input, T* output,
-                               const Eigen::DSizes<Eigen::DenseIndex, Dims>& threshold,
-                               const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_range) {
-  // std::cout << "dim_size[0]:" << dim_size[0] << '\n';
-  // std::cout << "threshold[0]:" << threshold[0] << '\n';
-  // std::cout << "dim_range[0]:" << dim_range[0] << '\n';
+                               const int[] threshold,
+                               const int[] dim_range) {
   const int64 start = blockIdx.x * blockDim.x + threadIdx.x;
   const int64 end = N;
 
@@ -91,9 +88,9 @@ struct RollFunctor<GPUDevice, T, Dims> {
                   typename TTypes<T, Dims>::Tensor output,
                   const Eigen::DSizes<Eigen::DenseIndex, Dims>& threshold,
                   const Eigen::DSizes<Eigen::DenseIndex, Dims>& dim_range) {
-    __shared__ Eigen::DSizes<Eigen::DenseIndex, Dims> _dim_size;
-    __shared__ Eigen::DSizes<Eigen::DenseIndex, Dims> _threshold;
-    __shared__ Eigen::DSizes<Eigen::DenseIndex, Dims> _dim_range;
+    __shared__ int _dim_size[Dims];
+    __shared__ int _threshold[Dims];
+    __shared__ int _dim_range[Dims];
     for (int d = 0; d < Dims; d++) {
       _dim_size[d] = dim_size[d];
       _threshold[d] = threshold[d];
