@@ -293,7 +293,6 @@ class RollOp : public OpKernel {
   } break
 
       switch (D) {
-        ROLL_FUNCTOR(0);
         ROLL_FUNCTOR(1);
         ROLL_FUNCTOR(2);
         ROLL_FUNCTOR(3);

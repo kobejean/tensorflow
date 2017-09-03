@@ -102,7 +102,6 @@ struct RollFunctor<GPUDevice, T, Dims> {
   template struct RollFunctor<GPUDevice, T, Dims>;
 
 #define DEFINE_GPU_SPECS(T)            \
-  DEFINE_GPU_SPEC_TYPE_DIMS(T, 0);     \
   DEFINE_GPU_SPEC_TYPE_DIMS(T, 1);     \
   DEFINE_GPU_SPEC_TYPE_DIMS(T, 2);     \
   DEFINE_GPU_SPEC_TYPE_DIMS(T, 3);     \
