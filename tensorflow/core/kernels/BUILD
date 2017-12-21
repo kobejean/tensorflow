@@ -2550,6 +2550,7 @@ cc_library(
 )
 
 MANIP_DEPS = [
+    ":ops_util",
     "//tensorflow/core:framework",
     "//tensorflow/core:lib",
     "//tensorflow/core:manip_ops_op_lib",
@@ -2562,7 +2563,7 @@ tf_kernel_library(
     deps = MANIP_DEPS,
 )
 
-tf_cc_test(
+tf_cuda_cc_test(
     name = "roll_op_test",
     size = "small",
     srcs = ["roll_op_test.cc"],

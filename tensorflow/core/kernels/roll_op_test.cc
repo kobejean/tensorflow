@@ -325,5 +325,7 @@ static Graph* RollGraph(const TensorShape& shape, int isd) {
 
 BM_ROLL_OUTER(cpu);
 BM_ROLL_ALL(cpu);
+BM_ROLL_OUTER(gpu);
+BM_ROLL_ALL(gpu);
 }  // namespace
 }  // namespace tensorflow

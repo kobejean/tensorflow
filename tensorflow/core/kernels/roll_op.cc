@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include "roll_op.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -269,6 +270,11 @@ class RollOp : public OpKernel {
         DoRoll<T>(context, N, D, dim_size, input_flat, output_flat, threshold,
                   dim_range);
       }
+    } else if (std::is_same<Device, GPUDevice>::value) {
+      // for GPUs
+      functor::RollFunctor<Device, T> func;
+      func(context->eigen_device<Device>(), N, D, dim_size, input_flat,
+           output_flat, threshold, dim_range);
     }
   }
 };
