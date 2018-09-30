@@ -2804,18 +2804,24 @@ tf_kernel_library(
     prefix = "roll_op",
     deps = [
         ":bounds_check",
+        ":ops_util",
+        "//tensorflow/core:core_cpu",
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
+        "//tensorflow/core:lib_internal",
+        "//tensorflow/core:proto_text",
+        "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:manip_ops_op_lib",
         "//third_party/eigen3",
     ],
 )
 
-tf_cc_test(
+tf_cuda_cc_test(
     name = "roll_op_test",
     size = "small",
     srcs = ["roll_op_test.cc"],
     deps = [
+        ":host_constant_op",
         ":ops_testutil",
         ":ops_util",
         ":roll_op",
@@ -2829,6 +2835,8 @@ tf_cc_test(
         "//tensorflow/core:testlib",
     ],
 )
+
+
 
 MATH_DEPS = [
     ":bounds_check",

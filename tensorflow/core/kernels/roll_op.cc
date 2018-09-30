@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include "roll_op.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -27,7 +28,13 @@ limitations under the License.
 namespace tensorflow {
 
 #define EIGEN_USE_THREADS
-using CPUDevice = Eigen::ThreadPoolDevice;
+
+#if GOOGLE_CUDA
+#define EIGEN_USE_GPU
+#endif  // GOOGLE_CUDA
+
+typedef Eigen::ThreadPoolDevice CPUDevice;
+typedef Eigen::GpuDevice GPUDevice;
 
 // dim_size - the size of each dimension
 // dim_range - the number of indices over in the flattened tensor
@@ -266,6 +273,13 @@ class RollOp : public OpKernel {
       // modulo that works with negatives: ((x % y) + y) % y
       shift_mod_sum[axis] = (sum % ds + ds) % ds;
     }
+
+    AllocatorAttributes alloc_attr;
+    alloc_attr.set_on_host(true);
+    if (std::is_same<Device, GPUDevice>::value) {
+      alloc_attr.set_gpu_compatible(true);
+    }
+
     // the size of each dimension
     gtl::InlinedVector<int, 4> dim_size(num_dims);
     // threshold[i] is the index that the roll starts to wrap back to the front
@@ -278,8 +292,7 @@ class RollOp : public OpKernel {
     // inner shift dimension (inner most shifted dimension)
     int64 isd = 0;
     for (int i = num_dims - 1; i >= 0; i--) {
-      if (isd == 0 && shift_mod_sum[i] != 0) isd = i;
-      const int ds = std::max<int>(static_cast<int>(input.dim_size(i)), 1);
+      const int ds = std::max<int32>(static_cast<int32>(input.dim_size(i)), 1);
       dim_size[i] = ds;
       threshold[i] = (ds - shift_mod_sum[i]) % ds;
       dim_size_prod *= static_cast<int64>(input.dim_size(i));
@@ -292,13 +305,61 @@ class RollOp : public OpKernel {
     auto input_flat = input.flat<T>().data();
     auto output_flat = output->flat<T>().data();
 
-    if (std::is_same<Device, CPUDevice>::value) {
-      if (DataTypeCanUseMemcpy(DataTypeToEnum<T>::v())) {
-        // V2 copies memory in groups instead of element by element
+    // count the effective dimentions and determine if we want to run on gpu
+    int num_eff_dims = 0;
+    for (size_t i = 0; i < num_dims; i++) {
+      if (threshold[i] != 0 || i == 0) {
+        num_eff_dims++;
+      }
+    }
+
+    bool can_do_gpu = num_eff_dims <= MAX_DIM_GPU && num_elements <= kint32max;
+
+    if (std::is_same<Device, GPUDevice>::value && can_do_gpu) {
+      gtl::InlinedVector<int, 4> eff_dims(num_eff_dims);
+      eff_dims[0] = 0;
+      for (size_t i = 1; i < num_eff_dims; i++) {
+        size_t j = eff_dims[i-1] + 1;
+        while (threshold[j] == 0 && j < num_dims) {
+          j++;
+        }
+        if (j < num_dims) {
+          eff_dims[i] = j;
+        }
+      }
+
+      Eigen::array<int64, MAX_DIM_GPU> eff_shifts;
+      Eigen::array<int64, MAX_DIM_GPU> eff_range;
+      Eigen::array<int64, MAX_DIM_GPU> eff_sizes;
+
+      size_t last_idx = num_eff_dims-1;
+      size_t last_eff_dim = eff_dims[last_idx];
+
+      eff_range[last_idx] = dim_range[last_eff_dim];
+      eff_size[last_idx] = dim_range[last_eff_dim];
+      eff_shift[last_idx] = dim_range[last_eff_dim] - threshold[last_eff_dim];
+
+      for (size_t i = last_idx-1; i >= 0; i--) {
+        size_t eff_dim = eff_dims[i];
+        eff_range[i] = dim_range[eff_dim];
+        eff_size[i] = eff_range[i] / eff_range[i+1];
+        const int64 eff_threshold = threshold[eff_dim] * dim_range[eff_dim+1];
+        eff_shift[i] = dim_range[eff_dim] - eff_threshold;
+      }
+
+      functor::RollFunctor<Device, T, MAX_EFF_DIMS_GPU> func;
+      func(context->eigen_device<Device>(), num_elements, num_eff_dims,
+           input_flat, output_flat, eff_shift, eff_range, eff_size);
+
+    } else if (std::is_same<Device, CPUDevice>::value) {
+      // memcpy is faster when the contiguous block is size > 32
+      bool memcpyIsFaster = dim_range[isd] > 32;
+      if (DataTypeCanUseMemcpy(DataTypeToEnum<T>::v()) && memcpyIsFaster) {
+        // copies memory in groups instead of element by element
         DoRollWithMemcpy<T>(context, num_elements, num_dims, dim_size,
                             input_flat, output_flat, threshold, dim_range, isd);
       } else {
-        // incase memcpy does not work for current data type
+        // in-case memcpy does not work for current data type or is slower
         DoRoll<T>(context, num_elements, num_dims, dim_size, input_flat,
                   output_flat, threshold, dim_range);
       }
@@ -332,7 +393,38 @@ class RollOp : public OpKernel {
                               .TypeConstraint<int64>("Tshift")   \
                               .TypeConstraint<int64>("Taxis"),   \
                           RollOp<CPUDevice, type, int64, int64>)
-
 TF_CALL_ALL_TYPES(REGISTER_CPU);
 #undef REGISTER_CPU
+
+// Register the GPU kernels.
+#ifdef GOOGLE_CUDA
+#define REGISTER_GPU(type)                                       \
+  REGISTER_KERNEL_BUILDER(Name("Roll")                           \
+                              .Device(DEVICE_GPU)                \
+                              .TypeConstraint<type>("T")         \
+                              .TypeConstraint<int32>("Tshift")   \
+                              .TypeConstraint<int32>("Taxis"),   \
+                          RollOp<GPUDevice, type, int32, int32>) \
+  REGISTER_KERNEL_BUILDER(Name("Roll")                           \
+                              .Device(DEVICE_GPU)                \
+                              .TypeConstraint<type>("T")         \
+                              .TypeConstraint<int64>("Tshift")   \
+                              .TypeConstraint<int32>("Taxis"),   \
+                          RollOp<GPUDevice, type, int64, int32>) \
+  REGISTER_KERNEL_BUILDER(Name("Roll")                           \
+                              .Device(DEVICE_GPU)                \
+                              .TypeConstraint<type>("T")         \
+                              .TypeConstraint<int32>("Tshift")   \
+                              .TypeConstraint<int64>("Taxis"),   \
+                          RollOp<GPUDevice, type, int32, int64>) \
+  REGISTER_KERNEL_BUILDER(Name("Roll")                           \
+                              .Device(DEVICE_GPU)                \
+                              .TypeConstraint<type>("T")         \
+                              .TypeConstraint<int64>("Tshift")   \
+                              .TypeConstraint<int64>("Taxis"),   \
+                          RollOp<GPUDevice, type, int64, int64>)
+
+TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU)
+#undef REGISTER_GPU
+#endif  // GOOGLE_CUDA
 }  // namespace tensorflow

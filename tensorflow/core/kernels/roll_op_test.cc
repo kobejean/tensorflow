@@ -15,9 +15,8 @@ limitations under the License.
 
 #include <functional>
 #include <memory>
+#include <vector>
 
-#include "tensorflow/core/common_runtime/device.h"
-#include "tensorflow/core/common_runtime/device_factory.h"
 #include "tensorflow/core/common_runtime/kernel_benchmark_testlib.h"
 #include "tensorflow/core/framework/allocator.h"
 #include "tensorflow/core/framework/fake_input.h"
@@ -26,6 +25,9 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/framework/types.pb.h"
+#include "tensorflow/core/graph/graph.h"
+#include "tensorflow/core/graph/node_builder.h"
+#include "tensorflow/core/graph/testlib.h"
 #include "tensorflow/core/kernels/ops_testutil.h"
 #include "tensorflow/core/kernels/ops_util.h"
 #include "tensorflow/core/lib/io/path.h"
@@ -35,6 +37,23 @@ limitations under the License.
 #include "tensorflow/core/platform/test_benchmark.h"
 
 namespace tensorflow {
+
+namespace test {
+namespace graph {
+
+class Node* Roll(Graph* g, class Node* input, class Node* shift, class Node* axis) {
+  class Node* ret;
+  TF_CHECK_OK(NodeBuilder(g->NewName("n"), "Roll")
+                  .Input(input)
+                  .Input(shift)
+                  .Input(axis)
+                  .Finalize(g, &ret));
+  return ret;
+}
+
+}  // namespace graph
+}  // namespace test
+
 namespace {
 
 class RollOpTest : public OpsTestBase {
@@ -430,15 +449,15 @@ TEST_F(RollOpTest, Error_AxisOutOfRange) {
 
 // isd - (inner shift dimension) The inner most dimension to be shifted.
 //    All outer dimensions will also be shifted for testing.
-static Graph* RollGraph(const TensorShape& shape, int isd) {
-  Graph* g = new Graph(OpRegistry::Global());
+static Graph* RollGraph(TensorShape& shape, int isd) {
+  auto* g = new Graph(OpRegistry::Global());
   Tensor input(DT_FLOAT, shape);
   input.flat<float>().setRandom();
-  const int dims = static_cast<int>(input.dims());
+  int dims = input.dims();
   Tensor shift(DT_INT32, TensorShape({dims}));
   for (int i = 0; i < dims; i++) {
     // shift the inner shift dimension and all outer dimensions
-    shift.flat<int32>()(i) = (i <= isd) ? 2 : 0;
+    shift.flat<int32>()(i) = (i <= isd) ? input.dim_size(i) / 2 : 0;
   }
   Tensor axis(DT_INT32, TensorShape({dims}));
   for (int i = 0; i < dims; i++) {
@@ -450,37 +469,40 @@ static Graph* RollGraph(const TensorShape& shape, int isd) {
   return g;
 }
 
-#define BM_ROLL_OUTER(DEVICE)                                                 \
-  static void BM_##DEVICE##_roll_outer(int iters, int rows, int columns) {    \
-    TensorShape shape{rows, columns};                                         \
+#define BM_ROLL_IMAGE_CHANNELS(DEVICE)                                        \
+  static void BM_##DEVICE##_roll_channels(int iters, int n, int chan) {       \
+    TensorShape shape{ n, n, chan };                                          \
     const int64 num_items = static_cast<int64>(iters) * shape.num_elements(); \
     testing::ItemsProcessed(num_items);                                       \
     testing::BytesProcessed(num_items * sizeof(float));                       \
-    testing::UseRealTime();                                                   \
-    test::Benchmark(#DEVICE, RollGraph(shape, 0)).Run(iters);                 \
+    test::Benchmark(#DEVICE, RollGraph(shape, 2)).Run(iters);                 \
   }                                                                           \
-  BENCHMARK(BM_##DEVICE##_roll_outer)                                         \
-      ->ArgPair(256, 256)                                                     \
-      ->ArgPair(512, 512)                                                     \
-      ->ArgPair(1024, 1024)                                                   \
-      ->ArgPair(2048, 2048)
+  BENCHMARK(BM_##DEVICE##_roll_channels)                                      \
+      ->ArgPair(256, 3)                                                       \
+      ->ArgPair(512, 3)                                                       \
+      ->ArgPair(1024, 3)                                                      \
+      ->ArgPair(2048, 3)
 
-#define BM_ROLL_ALL(DEVICE)                                                   \
-  static void BM_##DEVICE##_roll_all(int iters, int rows, int columns) {      \
-    TensorShape shape{rows, columns};                                         \
+#define BM_ROLL_IMAGE(DEVICE)                                                 \
+  static void BM_##DEVICE##_roll_image(int iters, int n, int chan) {          \
+    TensorShape shape{ n, n, chan };                                          \
     const int64 num_items = static_cast<int64>(iters) * shape.num_elements(); \
     testing::ItemsProcessed(num_items);                                       \
     testing::BytesProcessed(num_items * sizeof(float));                       \
-    testing::UseRealTime();                                                   \
     test::Benchmark(#DEVICE, RollGraph(shape, 1)).Run(iters);                 \
   }                                                                           \
-  BENCHMARK(BM_##DEVICE##_roll_all)                                           \
-      ->ArgPair(256, 256)                                                     \
-      ->ArgPair(512, 512)                                                     \
-      ->ArgPair(1024, 1024)                                                   \
-      ->ArgPair(2048, 2048)
+  BENCHMARK(BM_##DEVICE##_roll_image)                                         \
+      ->ArgPair(256, 3)                                                       \
+      ->ArgPair(512, 3)                                                       \
+      ->ArgPair(1024, 3)                                                      \
+      ->ArgPair(2048, 3)
 
-BM_ROLL_OUTER(cpu);
-BM_ROLL_ALL(cpu);
+BM_ROLL_IMAGE_CHANNELS(cpu);
+BM_ROLL_IMAGE(cpu);
+
+#ifdef GOOGLE_CUDA
+BM_ROLL_IMAGE_CHANNELS(gpu);
+BM_ROLL_IMAGE(gpu);
+#endif  // GOOGLE_CUDA
 }  // namespace
 }  // namespace tensorflow
