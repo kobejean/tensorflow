@@ -29,8 +29,8 @@ typedef Eigen::GpuDevice GPUDevice;
 namespace {
 // CUDA kernel.
 template <typename T>
-__global__ void RollKernel(CudaLaunchConfig config, const int64 num_elements,
-                           const int32 num_eff_dims, const T* input, T* output,
+__global__ void RollKernel(CudaLaunchConfig config, const int32 num_eff_dims,
+                           const T* input, T* output,
                            const Eigen::array<int64, MAX_DIM_GPU> eff_shift,
                            const Eigen::array<int64, MAX_DIM_GPU> eff_range) {
   CUDA_1D_KERNEL_LOOP(i, config.virtual_thread_count) {
@@ -52,7 +52,7 @@ __global__ void RollKernel1D(CudaLaunchConfig config, const T* input, T* output,
                              const Eigen::array<int64, MAX_DIM_GPU> eff_range) {
   const int eff_threshold_x = eff_range[0] - eff_shift[0];
   CUDA_1D_KERNEL_LOOP(i, config.virtual_thread_count) {
-    if (i < x_eff_threshold) {
+    if (i < eff_threshold_x) {
       output[i + eff_shift[0]] = input[i];
     } else {
       output[i - eff_threshold_x] = input[i];
@@ -105,39 +105,36 @@ namespace functor {
 template <typename T>
 struct RollFunctor<GPUDevice, T> {
   void operator()(const GPUDevice& d, const int64 num_elements,
-                  const int num_eff_dims, const T* input_flat, T* output_flat,
+                  const int num_eff_dims, const T* input, T* output,
                   const Eigen::array<int64, MAX_DIM_GPU> eff_shift,
                   const Eigen::array<int64, MAX_DIM_GPU> eff_range,
                   const Eigen::array<int64, MAX_DIM_GPU> eff_size) {
     switch (num_eff_dims) {
       case 1: {
-        auto config = GetCudaLaunchConfig(num_elements, d)//, RollKernel1D<T>, 0, 0);
+        auto config = GetCudaLaunchConfig(num_elements, d);//, RollKernel1D<T>, 0, 0);
         RollKernel1D<T>
             <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-                config, dim_size, input,
-                output, threshold, dim_range, eff_dims);
+                config, input, output, eff_shift, eff_range);
       } break;
       case 2: {
         auto config = GetCuda2DLaunchConfig(eff_size[0], eff_size[1],
-                                            d)//, RollKernel2D<T>, 0, 0);
+                                            d);//, RollKernel2D<T>, 0, 0);
         RollKernel2D<T>
             <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-                config, dim_size, input,
-                output, threshold, dim_range, eff_dims);
+                config, input, output, eff_shift, eff_range);
       } break;
       case 3: {
         auto config = GetCuda3DLaunchConfig(eff_size[0], eff_size[1],
-                                            eff_size[2], d)//, RollKernel3D<T>, 0, 0);
+                                            eff_size[2], d, RollKernel3D<T>, 0, 0);
         RollKernel3D<T>
             <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-                config, dim_size, input,
-                output, threshold, dim_range, eff_dims);
+                config, input, output, eff_shift, eff_range);
       } break;
       default: {
         auto config = GetCudaLaunchConfig(num_elements, d);
         RollKernel<T>
             <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-                config, input, output, eff_shift, eff_range);
+                config, num_eff_dims, input, output, eff_shift, eff_range);
       } break;
     }
   }

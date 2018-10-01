@@ -469,38 +469,71 @@ static Graph* RollGraph(TensorShape& shape, int isd) {
   return g;
 }
 
-#define BM_ROLL_IMAGE_CHANNELS(DEVICE)                                        \
-  static void BM_##DEVICE##_roll_channels(int iters, int n, int chan) {       \
-    TensorShape shape{ n, n, chan };                                          \
+#define BM_ROLL_VIDEO_CHANNELS(DEVICE)                                        \
+  static void BM_##DEVICE##_roll_vid_channels(int iters, int frames, int n) { \
+    TensorShape shape{ frames, n, n, 3 };                                     \
     const int64 num_items = static_cast<int64>(iters) * shape.num_elements(); \
     testing::ItemsProcessed(num_items);                                       \
     testing::BytesProcessed(num_items * sizeof(float));                       \
+    testing::UseRealTime();                                                   \
+    test::Benchmark(#DEVICE, RollGraph(shape, 3)).Run(iters);                 \
+  }                                                                           \
+  BENCHMARK(BM_##DEVICE##_roll_vid_channels)                                  \
+      ->ArgPair(30, 64)                                                       \
+      ->ArgPair(30, 128)                                                      \
+      ->ArgPair(30, 256)
+
+#define BM_ROLL_VIDEO_TIME(DEVICE)                                            \
+  static void BM_##DEVICE##_roll_vid_time(int iters, int frames, int n) {     \
+    TensorShape shape{ frames, n, n, 3 };                                     \
+    const int64 num_items = static_cast<int64>(iters) * shape.num_elements(); \
+    testing::ItemsProcessed(num_items);                                       \
+    testing::BytesProcessed(num_items * sizeof(float));                       \
+    testing::UseRealTime();                                                   \
+    test::Benchmark(#DEVICE, RollGraph(shape, 3)).Run(iters);                 \
+  }                                                                           \
+  BENCHMARK(BM_##DEVICE##_roll_vid_time)                                      \
+      ->ArgPair(30, 64)                                                       \
+      ->ArgPair(30, 128)                                                      \
+      ->ArgPair(30, 256)
+
+
+#define BM_ROLL_IMAGE_CHANNELS(DEVICE)                                        \
+  static void BM_##DEVICE##_roll_img_channels(int iters, int n) {             \
+    TensorShape shape{ n, n, 3 };                                             \
+    const int64 num_items = static_cast<int64>(iters) * shape.num_elements(); \
+    testing::ItemsProcessed(num_items);                                       \
+    testing::BytesProcessed(num_items * sizeof(float));                       \
+    testing::UseRealTime();                                                   \
     test::Benchmark(#DEVICE, RollGraph(shape, 2)).Run(iters);                 \
   }                                                                           \
-  BENCHMARK(BM_##DEVICE##_roll_channels)                                      \
-      ->ArgPair(256, 3)                                                       \
-      ->ArgPair(512, 3)                                                       \
-      ->ArgPair(1024, 3)                                                      \
-      ->ArgPair(2048, 3)
+  BENCHMARK(BM_##DEVICE##_roll_img_channels)                                  \
+      ->Arg(256)                                                              \
+      ->Arg(512)                                                              \
+      ->Arg(1024)
 
 #define BM_ROLL_IMAGE(DEVICE)                                                 \
-  static void BM_##DEVICE##_roll_image(int iters, int n, int chan) {          \
-    TensorShape shape{ n, n, chan };                                          \
+  static void BM_##DEVICE##_roll_img(int iters, int n) {                      \
+    TensorShape shape{ n, n, 3 };                                             \
     const int64 num_items = static_cast<int64>(iters) * shape.num_elements(); \
     testing::ItemsProcessed(num_items);                                       \
     testing::BytesProcessed(num_items * sizeof(float));                       \
+    testing::UseRealTime();                                                   \
     test::Benchmark(#DEVICE, RollGraph(shape, 1)).Run(iters);                 \
   }                                                                           \
-  BENCHMARK(BM_##DEVICE##_roll_image)                                         \
-      ->ArgPair(256, 3)                                                       \
-      ->ArgPair(512, 3)                                                       \
-      ->ArgPair(1024, 3)                                                      \
-      ->ArgPair(2048, 3)
+  BENCHMARK(BM_##DEVICE##_roll_img)                                           \
+      ->Arg(256)                                                              \
+      ->Arg(512)                                                              \
+      ->Arg(1024)
 
+BM_ROLL_VIDEO_CHANNELS(cpu);
+BM_ROLL_VIDEO_TIME(cpu);
 BM_ROLL_IMAGE_CHANNELS(cpu);
 BM_ROLL_IMAGE(cpu);
 
 #ifdef GOOGLE_CUDA
+BM_ROLL_VIDEO_CHANNELS(gpu);
+BM_ROLL_VIDEO_TIME(gpu);
 BM_ROLL_IMAGE_CHANNELS(gpu);
 BM_ROLL_IMAGE(gpu);
 #endif  // GOOGLE_CUDA

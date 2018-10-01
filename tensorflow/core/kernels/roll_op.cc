@@ -314,44 +314,43 @@ class RollOp : public OpKernel {
     }
 
     bool can_do_gpu = num_eff_dims <= MAX_DIM_GPU && num_elements <= kint32max;
-
     if (std::is_same<Device, GPUDevice>::value && can_do_gpu) {
       gtl::InlinedVector<int, 4> eff_dims(num_eff_dims);
+
       eff_dims[0] = 0;
       for (size_t i = 1; i < num_eff_dims; i++) {
         size_t j = eff_dims[i-1] + 1;
-        while (threshold[j] == 0 && j < num_dims) {
+
+        while (threshold[j] == 0 && j < num_eff_dims) {
           j++;
         }
-        if (j < num_dims) {
-          eff_dims[i] = j;
-        }
+        eff_dims[i] = j;
       }
 
-      Eigen::array<int64, MAX_DIM_GPU> eff_shifts;
+      Eigen::array<int64, MAX_DIM_GPU> eff_shift;
       Eigen::array<int64, MAX_DIM_GPU> eff_range;
-      Eigen::array<int64, MAX_DIM_GPU> eff_sizes;
+      Eigen::array<int64, MAX_DIM_GPU> eff_size;
 
-      size_t last_idx = num_eff_dims-1;
+      size_t last_idx = (num_eff_dims-1 > 0) ? num_eff_dims-1 : 0;
       size_t last_eff_dim = eff_dims[last_idx];
 
       eff_range[last_idx] = dim_range[last_eff_dim];
       eff_size[last_idx] = dim_range[last_eff_dim];
       eff_shift[last_idx] = dim_range[last_eff_dim] - threshold[last_eff_dim];
 
-      for (size_t i = last_idx-1; i >= 0; i--) {
+      for (int i = num_eff_dims-2; i >= 0; --i) {
         size_t eff_dim = eff_dims[i];
         eff_range[i] = dim_range[eff_dim];
         eff_size[i] = eff_range[i] / eff_range[i+1];
+
         const int64 eff_threshold = threshold[eff_dim] * dim_range[eff_dim+1];
         eff_shift[i] = dim_range[eff_dim] - eff_threshold;
       }
 
-      functor::RollFunctor<Device, T, MAX_EFF_DIMS_GPU> func;
+      functor::RollFunctor<Device, T> func;
       func(context->eigen_device<Device>(), num_elements, num_eff_dims,
            input_flat, output_flat, eff_shift, eff_range, eff_size);
-
-    } else if (std::is_same<Device, CPUDevice>::value) {
+    } else {//if (std::is_same<Device, CPUDevice>::value) {
       // memcpy is faster when the contiguous block is size > 32
       bool memcpyIsFaster = dim_range[isd] > 32;
       if (DataTypeCanUseMemcpy(DataTypeToEnum<T>::v()) && memcpyIsFaster) {

@@ -26,10 +26,10 @@ const int MAX_DIM_GPU = 8;
 namespace tensorflow {
 namespace functor {
 
-template <typename Device, typename T, size_t Dims>
+template <typename Device, typename T>
 struct RollFunctor {
   void operator()(const Device& d, const int64 num_elements,
-                  const int num_eff_dims, const T* input_flat, T* output_flat,
+                  const int num_eff_dims, const T* input, T* output,
                   const Eigen::array<int64, MAX_DIM_GPU> eff_shift,
                   const Eigen::array<int64, MAX_DIM_GPU> eff_range,
                   const Eigen::array<int64, MAX_DIM_GPU> eff_size);
