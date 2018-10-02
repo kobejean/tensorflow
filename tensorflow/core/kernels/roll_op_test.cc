@@ -110,11 +110,7 @@ TEST_F(RollOpTest, ScalarIndices_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, ScalarIndices_Complex) {
-  #ifdef GOOGLE_CUDA
-  MakeOp(Device::GPU, DT_COMPLEX64, DT_INT32);
-  #else
   MakeOp(Device::CPU, DT_COMPLEX64, DT_INT32);
-  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<std::complex<float>>(
