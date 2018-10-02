@@ -165,7 +165,7 @@ struct RollFunctor<GPUDevice, T> {
     // 266241260084039
     //
     const int work_per_thread = DivUp(num_elements, thread_count);
-    if (work_per_thread > 8) {
+    if (false/*work_per_thread > 8*/) {
       CudaLaunchConfig config;
       const int thread_per_block = std::min(1024, d.maxCudaThreadsPerBlock());
       const int virtual_block_count = DivUp(thread_count, thread_per_block);
@@ -182,25 +182,25 @@ struct RollFunctor<GPUDevice, T> {
 
     } else {
       switch (num_eff_dims) {
-        case 1: {
-          auto config = GetCudaLaunchConfig(num_elements, d);
-          RollKernel1D<T>
-              <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-                  config, input, output, eff_shift, eff_range);
-        } break;
-        case 2: {
-          auto config = GetCuda2DLaunchConfig(eff_size[0], eff_size[1], d);
-          RollKernel2D<T>
-              <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-                  config, input, output, eff_shift, eff_range);
-        } break;
-        case 3: {
-          auto config = GetCuda3DLaunchConfig(eff_size[0], eff_size[1],
-                                              eff_size[2], d, RollKernel3D<T>, 0, 0);
-          RollKernel3D<T>
-              <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-                  config, input, output, eff_shift, eff_range);
-        } break;
+        // case 1: {
+        //   auto config = GetCudaLaunchConfig(num_elements, d);
+        //   RollKernel1D<T>
+        //       <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+        //           config, input, output, eff_shift, eff_range);
+        // } break;
+        // case 2: {
+        //   auto config = GetCuda2DLaunchConfig(eff_size[0], eff_size[1], d);
+        //   RollKernel2D<T>
+        //       <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+        //           config, input, output, eff_shift, eff_range);
+        // } break;
+        // case 3: {
+        //   auto config = GetCuda3DLaunchConfig(eff_size[0], eff_size[1],
+        //                                       eff_size[2], d, RollKernel3D<T>, 0, 0);
+        //   RollKernel3D<T>
+        //       <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+        //           config, input, output, eff_shift, eff_range);
+        // } break;
         default: {
           auto config = GetCudaLaunchConfig(num_elements, d);
           RollKernel<T>
