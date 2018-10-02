@@ -42,7 +42,7 @@ __global__ void RollKernelV2(CudaLaunchConfig config,
     const int64 start = virtual_thread * work_per_thread;
     const int64 end = tf_min<int64>(start+work_per_thread, num_elements);
     // array of indices for each dimension
-    // Eigen::array<int64, MAX_DIM_GPU> indices;
+    Eigen::array<int64, MAX_DIM_GPU> indices;
     // int64 offset = 0; // the shift along the flattened tensor for current element
     // // initialize indices and offset
     // for (int i = 0; i < num_eff_dims; i++) {
