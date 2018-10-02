@@ -162,7 +162,8 @@ struct RollFunctor<GPUDevice, T> {
                   const Eigen::array<int64, MAX_DIM_GPU> eff_size) {
     const int thread_count =
           d.getNumCudaMultiProcessors() * d.maxCudaThreadsPerMultiProcessor();
-    std::cout << "/* thread_count */" << thread_count << '\x1b[2K\x1b[G';
+    // 266241260084039
+    //
     const int work_per_thread = DivUp(num_elements, thread_count);
     if (work_per_thread > 8) {
       CudaLaunchConfig config;
@@ -170,6 +171,7 @@ struct RollFunctor<GPUDevice, T> {
       const int virtual_block_count = DivUp(thread_count, thread_per_block);
       const int block_count =
           std::min(virtual_block_count, d.getNumCudaMultiProcessors());
+      // thread_count > num_elements because work_per_thread > 8
       config.virtual_thread_count = thread_count;
       config.thread_per_block = thread_per_block;
       config.block_count = block_count;
