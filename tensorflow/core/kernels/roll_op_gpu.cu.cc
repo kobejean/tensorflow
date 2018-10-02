@@ -172,7 +172,7 @@ struct RollFunctor<GPUDevice, T> {
       config.virtual_thread_count = thread_count;
       config.thread_per_block = thread_per_block;
       config.block_count = block_count;
-
+      std::cout << "/* RollKernelV2 */" << '\n';
       RollKernelV2<T>
           <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
               config, num_eff_dims, work_per_thread, num_elements, input,
@@ -181,12 +181,14 @@ struct RollFunctor<GPUDevice, T> {
     } else {
       switch (num_eff_dims) {
         case 1: {
+          std::cout << "/* RollKernel1D */" << '\n';
           auto config = GetCudaLaunchConfig(num_elements, d);
           RollKernel1D<T>
               <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
                   config, input, output, eff_shift, eff_range);
         } break;
         case 2: {
+          std::cout << "/* RollKernel2D */" << '\n';
           auto config = GetCuda2DLaunchConfig(eff_size[0], eff_size[1],
                                               d);
           RollKernel2D<T>
@@ -194,6 +196,7 @@ struct RollFunctor<GPUDevice, T> {
                   config, input, output, eff_shift, eff_range);
         } break;
         case 3: {
+          std::cout << "/* RollKernel3D */" << '\n';
           auto config = GetCuda3DLaunchConfig(eff_size[0], eff_size[1],
                                               eff_size[2], d, RollKernel3D<T>, 0, 0);
           RollKernel3D<T>
@@ -201,6 +204,7 @@ struct RollFunctor<GPUDevice, T> {
                   config, input, output, eff_shift, eff_range);
         } break;
         default: {
+          std::cout << "/* RollKernel */" << '\n';
           auto config = GetCudaLaunchConfig(num_elements, d);
           RollKernel<T>
               <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
