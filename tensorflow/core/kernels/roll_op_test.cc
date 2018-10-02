@@ -77,7 +77,7 @@ class RollOpTest : public OpsTestBase {
 
 TEST_F(RollOpTest, ScalarIndices) {
   #ifdef GOOGLE_CUDA
-  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
   #else
   MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
   #endif  // GOOGLE_CUDA
@@ -90,15 +90,12 @@ TEST_F(RollOpTest, ScalarIndices) {
   // Check the output.
   Tensor expected(allocator(), DT_FLOAT, TensorShape({5}));
   test::FillValues<float>(&expected, {2, 3, 4, 0, 1});
+  TF_EXPECT_OK(device_->Sync());
   test::ExpectTensorEqual<float>(expected, *GetOutput(0));
 }
 
 TEST_F(RollOpTest, ScalarIndices_NoMemcpy) {
-  #ifdef GOOGLE_CUDA
-  MakeOp(Device::GPU, DT_STRING, DT_INT32);
-  #else
   MakeOp(Device::CPU, DT_STRING, DT_INT32);
-  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(TensorShape({5}), {"a", "b", "c", "d", "e"});
