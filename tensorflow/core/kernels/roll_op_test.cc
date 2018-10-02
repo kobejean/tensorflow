@@ -490,7 +490,7 @@ static Graph* RollGraph(TensorShape& shape, int isd) {
     testing::ItemsProcessed(num_items);                                       \
     testing::BytesProcessed(num_items * sizeof(float));                       \
     testing::UseRealTime();                                                   \
-    test::Benchmark(#DEVICE, RollGraph(shape, 3)).Run(iters);                 \
+    test::Benchmark(#DEVICE, RollGraph(shape, 0)).Run(iters);                 \
   }                                                                           \
   BENCHMARK(BM_##DEVICE##_roll_vid_time)                                      \
       ->ArgPair(30, 64)                                                       \

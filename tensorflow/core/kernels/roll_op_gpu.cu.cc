@@ -162,6 +162,7 @@ struct RollFunctor<GPUDevice, T> {
                   const Eigen::array<int64, MAX_DIM_GPU> eff_size) {
     const int thread_count =
           d.getNumCudaMultiProcessors() * d.maxCudaThreadsPerMultiProcessor();
+    std::cout << "/* thread_count */" << thread_count << '\x1b[2K\x1b[G';
     const int work_per_thread = DivUp(num_elements, thread_count);
     if (work_per_thread > 8) {
       CudaLaunchConfig config;
@@ -186,8 +187,7 @@ struct RollFunctor<GPUDevice, T> {
                   config, input, output, eff_shift, eff_range);
         } break;
         case 2: {
-          auto config = GetCuda2DLaunchConfig(eff_size[0], eff_size[1],
-                                              d);
+          auto config = GetCuda2DLaunchConfig(eff_size[0], eff_size[1], d);
           RollKernel2D<T>
               <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
                   config, input, output, eff_shift, eff_range);
