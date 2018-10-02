@@ -77,7 +77,7 @@ class RollOpTest : public OpsTestBase {
 
 TEST_F(RollOpTest, ScalarIndices) {
   #ifdef GOOGLE_CUDA
-  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
   #else
   MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
   #endif  // GOOGLE_CUDA
