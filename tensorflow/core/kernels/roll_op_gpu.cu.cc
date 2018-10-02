@@ -172,7 +172,6 @@ struct RollFunctor<GPUDevice, T> {
       config.virtual_thread_count = thread_count;
       config.thread_per_block = thread_per_block;
       config.block_count = block_count;
-      std::cout << "/* RollKernelV2 */" << '\n';
       RollKernelV2<T>
           <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
               config, num_eff_dims, work_per_thread, num_elements, input,
