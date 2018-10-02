@@ -2788,6 +2788,8 @@ tf_cc_tests(
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
         "//tensorflow/core:testlib",
+        "//tensorflow/core/kernels:ops_testutil",
+
         "@com_google_absl//absl/strings",
     ],
 )
@@ -2820,6 +2822,7 @@ tf_cuda_cc_test(
     name = "roll_op_test",
     size = "small",
     srcs = ["roll_op_test.cc"],
+    tags = tf_cuda_tests_tags(),
     deps = [
         ":host_constant_op",
         ":ops_testutil",
@@ -2828,8 +2831,10 @@ tf_cuda_cc_test(
         "//tensorflow/core:core_cpu",
         "//tensorflow/core:core_cpu_internal",
         "//tensorflow/core:framework",
+        "//tensorflow/core:framework_internal",
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core:tensorflow",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
         "//tensorflow/core:testlib",
