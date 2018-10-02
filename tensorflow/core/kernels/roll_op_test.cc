@@ -58,7 +58,14 @@ namespace {
 
 class RollOpTest : public OpsTestBase {
  protected:
-  void MakeOp(DataType data_type, DataType index_type) {
+  enum class Device { CPU, GPU };
+
+  void MakeOp(Device device, DataType data_type, DataType index_type) {
+    if (device == Device::GPU) {
+      SetDevice(DEVICE_GPU,
+                std::unique_ptr<tensorflow::Device>(DeviceFactory::NewDevice(
+                    "GPU", {}, "/job:a/replica:0/task:0")));
+    }
     TF_ASSERT_OK(NodeDefBuilder("myop", "Roll")
                      .Input(FakeInput(data_type))
                      .Input(FakeInput(index_type))
@@ -69,8 +76,11 @@ class RollOpTest : public OpsTestBase {
 };
 
 TEST_F(RollOpTest, ScalarIndices) {
-  MakeOp(DT_FLOAT, DT_INT32);
-
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
   // Feed and run
   AddInputFromArray<float>(TensorShape({5}), {0, 1, 2, 3, 4});
   AddInputFromArray<int32>(TensorShape({}), {3});
@@ -84,7 +94,11 @@ TEST_F(RollOpTest, ScalarIndices) {
 }
 
 TEST_F(RollOpTest, ScalarIndices_NoMemcpy) {
-  MakeOp(DT_STRING, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_STRING, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_STRING, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(TensorShape({5}), {"a", "b", "c", "d", "e"});
@@ -99,7 +113,11 @@ TEST_F(RollOpTest, ScalarIndices_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, ScalarIndices_Complex) {
-  MakeOp(DT_COMPLEX64, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_COMPLEX64, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_COMPLEX64, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<std::complex<float>>(
@@ -120,7 +138,11 @@ TEST_F(RollOpTest, ScalarIndices_Complex) {
 }
 
 TEST_F(RollOpTest, Simple_TwoD32) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({3, 5}),
@@ -137,7 +159,11 @@ TEST_F(RollOpTest, Simple_TwoD32) {
 }
 
 TEST_F(RollOpTest, Simple_TwoD32_NoMemcpy) {
-  MakeOp(DT_STRING, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_STRING, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_STRING, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(TensorShape({3, 5}),
@@ -155,7 +181,11 @@ TEST_F(RollOpTest, Simple_TwoD32_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, Simple_ThreeD32) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({2, 2, 3}),
@@ -171,7 +201,11 @@ TEST_F(RollOpTest, Simple_ThreeD32) {
 }
 
 TEST_F(RollOpTest, Simple_ThreeD32_NoMemcpy) {
-  MakeOp(DT_STRING, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_STRING, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_STRING, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(
@@ -189,7 +223,11 @@ TEST_F(RollOpTest, Simple_ThreeD32_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, Simple_TwoD64) {
-  MakeOp(DT_FLOAT, DT_INT64);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT64);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT64);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({5, 3}),
@@ -206,7 +244,11 @@ TEST_F(RollOpTest, Simple_TwoD64) {
 }
 
 TEST_F(RollOpTest, Simple_TwoD64_NoMemcpy) {
-  MakeOp(DT_STRING, DT_INT64);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_STRING, DT_INT64);
+  #else
+  MakeOp(Device::CPU, DT_STRING, DT_INT64);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(TensorShape({5, 3}),
@@ -224,7 +266,11 @@ TEST_F(RollOpTest, Simple_TwoD64_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, Simple_ThreeD64) {
-  MakeOp(DT_FLOAT, DT_INT64);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT64);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT64);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({4, 1, 3}),
@@ -240,7 +286,11 @@ TEST_F(RollOpTest, Simple_ThreeD64) {
 }
 
 TEST_F(RollOpTest, Simple_ThreeD64_NoMemcpy) {
-  MakeOp(DT_STRING, DT_INT64);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_STRING, DT_INT64);
+  #else
+  MakeOp(Device::CPU, DT_STRING, DT_INT64);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(
@@ -258,7 +308,11 @@ TEST_F(RollOpTest, Simple_ThreeD64_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, ZeroShift_ThreeD32) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({2, 2, 3}),
@@ -274,7 +328,11 @@ TEST_F(RollOpTest, ZeroShift_ThreeD32) {
 }
 
 TEST_F(RollOpTest, ZeroShift_ThreeD32_NoMemcpy) {
-  MakeOp(DT_STRING, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_STRING, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_STRING, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(
@@ -292,7 +350,11 @@ TEST_F(RollOpTest, ZeroShift_ThreeD32_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, ZeroSize_ThreeD32) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({5, 0, 0}), {});
@@ -306,7 +368,11 @@ TEST_F(RollOpTest, ZeroSize_ThreeD32) {
 }
 
 TEST_F(RollOpTest, ZeroSize_ThreeD32_NoMemcpy) {
-  MakeOp(DT_STRING, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_STRING, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_STRING, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(TensorShape({5, 0, 0}), {});
@@ -320,7 +386,11 @@ TEST_F(RollOpTest, ZeroSize_ThreeD32_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, OneSize_ThreeD32) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({1, 1, 1}), {5});
@@ -335,7 +405,11 @@ TEST_F(RollOpTest, OneSize_ThreeD32) {
 }
 
 TEST_F(RollOpTest, OneSize_ThreeD32_NoMemcpy) {
-  MakeOp(DT_STRING, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_STRING, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_STRING, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(TensorShape({1, 1, 1}), {"a"});
@@ -350,6 +424,11 @@ TEST_F(RollOpTest, OneSize_ThreeD32_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, MultiShifts_TwoD32) {
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
   MakeOp(DT_FLOAT, DT_INT32);
 
   // Feed and run
@@ -367,7 +446,11 @@ TEST_F(RollOpTest, MultiShifts_TwoD32) {
 }
 
 TEST_F(RollOpTest, MultiShifts_TwoD32_NoMemcpy) {
-  MakeOp(DT_STRING, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_STRING, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_STRING, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<string>(TensorShape({3, 5}),
@@ -385,7 +468,11 @@ TEST_F(RollOpTest, MultiShifts_TwoD32_NoMemcpy) {
 }
 
 TEST_F(RollOpTest, Error_InputMustBeVectorOrHigher) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({}), {7});
@@ -398,7 +485,11 @@ TEST_F(RollOpTest, Error_InputMustBeVectorOrHigher) {
 }
 
 TEST_F(RollOpTest, Error_AxisMustBeScalarOrVector) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({2, 2}), {1, 2, 3, 4});
@@ -411,7 +502,11 @@ TEST_F(RollOpTest, Error_AxisMustBeScalarOrVector) {
 }
 
 TEST_F(RollOpTest, Error_ShiftMustBeScalarOrVector) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({2, 2}), {1, 2, 3, 4});
@@ -424,7 +519,11 @@ TEST_F(RollOpTest, Error_ShiftMustBeScalarOrVector) {
 }
 
 TEST_F(RollOpTest, Error_ShiftAndAxisMustBeSameSize) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({2, 2}), {1, 2, 3, 4});
@@ -437,7 +536,11 @@ TEST_F(RollOpTest, Error_ShiftAndAxisMustBeSameSize) {
 }
 
 TEST_F(RollOpTest, Error_AxisOutOfRange) {
-  MakeOp(DT_FLOAT, DT_INT32);
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({4}), {1, 2, 3, 4});
