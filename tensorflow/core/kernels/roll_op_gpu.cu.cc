@@ -52,30 +52,30 @@ __global__ void RollKernelV2(CudaLaunchConfig config,
       indices[i] = indx;
       offset += shift - (start % eff_range[i]);
     }
-    //
-    //
-    // for (int64 i = start; i < end; i++) {
-    //   output[i + offset] = input[i];
-    //   // create next combination of indices
-    //   // while at it adjust offset if needed
-    //   for (int j = num_eff_dims - 1; j >= 0; j--) {
-    //     const int indx = (indices[j] + 1) % eff_size[i];
-    //     indices[j] = indx;
-    //     if (indx != 0) {
-    //       if (indx == eff_size[i] - eff_shift[j]) {  // we've reached the threshold
-    //         // dim_range[j] = threshold[j] + shift[j]
-    //         // offset = shift[j] + ... other offsets
-    //         // offset - dim_range[j] = -threshold[j] + ... other offsets
-    //         // thus we undo our previous offset as well as add a new offset of
-    //         // -threshold[j] in one operation
-    //         offset -= eff_range[j];  // now wraps around
-    //       }
-    //       break;                         // indx != 0 don't need to carry
-    //     } else if (eff_shift[j] != 0) {  // if threshold is 0 shift is 0
-    //       offset += eff_range[j];        // indx became 0 so reverse wrap around
-    //     }
-    //   }
-    // }
+
+
+    for (int64 i = start; i < end; i++) {
+      output[i + offset] = input[i];
+      // create next combination of indices
+      // while at it adjust offset if needed
+      for (int j = num_eff_dims - 1; j >= 0; j--) {
+        const int indx = (indices[j] + 1) % eff_size[j];
+        indices[j] = indx;
+        if (indx != 0) {
+          if (indx == eff_size[j] - eff_shift[j]) {  // we've reached the threshold
+            // dim_range[j] = threshold[j] + shift[j]
+            // offset = shift[j] + ... other offsets
+            // offset - dim_range[j] = -threshold[j] + ... other offsets
+            // thus we undo our previous offset as well as add a new offset of
+            // -threshold[j] in one operation
+            offset -= eff_range[j];  // now wraps around
+          }
+          break;                         // indx != 0 don't need to carry
+        } else if (eff_shift[j] != 0) {  // if threshold is 0 shift is 0
+          offset += eff_range[j];        // indx became 0 so reverse wrap around
+        }
+      }
+    }
   }
 }
 
