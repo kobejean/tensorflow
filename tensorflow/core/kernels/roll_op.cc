@@ -292,6 +292,7 @@ class RollOp : public OpKernel {
     // inner shift dimension (inner most shifted dimension)
     int64 isd = 0;
     for (int i = num_dims - 1; i >= 0; i--) {
+      if (isd == 0 && shift_mod_sum[i] != 0) isd = i;
       const int ds = std::max<int32>(static_cast<int32>(input.dim_size(i)), 1);
       dim_size[i] = ds;
       threshold[i] = (ds - shift_mod_sum[i]) % ds;
@@ -315,18 +316,28 @@ class RollOp : public OpKernel {
 
     bool can_do_gpu = num_eff_dims <= MAX_DIM_GPU && num_elements <= kint32max;
     if (std::is_same<Device, GPUDevice>::value && can_do_gpu) {
-      gtl::InlinedVector<int, 4> eff_dims(num_eff_dims);
+      // run on GPU
 
+      // reduce the tensor dimensions to the dimensions that will get shifted.
+      // unshifted dimensions will get flattened to an outer shifted dimension
+      // or the first dimension (outer most dimension) if there are no
+      // outer shifted dimensions.
+      // num_eff_dims = number of efective dimensions
+      // eff_dims = array of original indicies of effective dimensions
+      gtl::InlinedVector<int, 4> eff_dims(num_eff_dims);
+      // always keeping the fist dimension regardless of whether it's shifted
       eff_dims[0] = 0;
       for (size_t i = 1; i < num_eff_dims; i++) {
+        // search after the previous effective dimension
         size_t j = eff_dims[i-1] + 1;
-
+        // when threshold[j] == 0, there is no shift, so skip this dimension
         while (threshold[j] == 0 && j < num_eff_dims) {
           j++;
         }
         eff_dims[i] = j;
       }
-
+      // eff_shift = effective shift - the amount elements will shift in the
+      // flattend tensor for a given effective dimension.
       Eigen::array<int64, MAX_DIM_GPU> eff_shift;
       Eigen::array<int64, MAX_DIM_GPU> eff_range;
       Eigen::array<int64, MAX_DIM_GPU> eff_size;
@@ -336,7 +347,13 @@ class RollOp : public OpKernel {
 
       eff_range[last_idx] = dim_range[last_eff_dim];
       eff_size[last_idx] = dim_range[last_eff_dim];
-      eff_shift[last_idx] = dim_range[last_eff_dim] - threshold[last_eff_dim];
+      if (last_idx < num_dims) {
+        const int64 stride = dim_range[last_eff_dim+1];
+        const int64 eff_threshold = threshold[last_eff_dim] * stride;
+        eff_shift[last_idx] = dim_range[last_eff_dim] - eff_threshold;
+      } else {
+        eff_shift[last_idx] = dim_range[last_eff_dim] - threshold[last_eff_dim];
+      }
 
       for (int i = num_eff_dims-2; i >= 0; --i) {
         size_t eff_dim = eff_dims[i];
@@ -350,7 +367,7 @@ class RollOp : public OpKernel {
       functor::RollFunctor<Device, T> func;
       func(context->eigen_device<Device>(), num_elements, num_eff_dims,
            input_flat, output_flat, eff_shift, eff_range, eff_size);
-    } else {//if (std::is_same<Device, CPUDevice>::value) {
+    } else {
       // memcpy is faster when the contiguous block is size > 32
       bool memcpyIsFaster = dim_range[isd] > 32;
       if (DataTypeCanUseMemcpy(DataTypeToEnum<T>::v()) && memcpyIsFaster) {
