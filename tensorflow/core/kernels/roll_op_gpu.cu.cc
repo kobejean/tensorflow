@@ -176,7 +176,7 @@ struct RollFunctor<GPUDevice, T> {
       RollKernelV2<T>
           <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
               config, num_eff_dims, work_per_thread, num_elements, input,
-              output, eff_shift, eff_range, eff_size)
+              output, eff_shift, eff_range, eff_size);
 
     } else {
       switch (num_eff_dims) {
