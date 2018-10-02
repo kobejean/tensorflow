@@ -2788,8 +2788,6 @@ tf_cc_tests(
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
         "//tensorflow/core:testlib",
-        "//tensorflow/core/kernels:ops_testutil",
-
         "@com_google_absl//absl/strings",
     ],
 )
