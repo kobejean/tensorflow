@@ -429,7 +429,6 @@ TEST_F(RollOpTest, MultiShifts_TwoD32) {
   #else
   MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
   #endif  // GOOGLE_CUDA
-  MakeOp(DT_FLOAT, DT_INT32);
 
   // Feed and run
   AddInputFromArray<float>(TensorShape({3, 5}),
