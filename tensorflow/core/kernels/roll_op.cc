@@ -59,31 +59,27 @@ void DoRoll(OpKernelContext* context, const int64 num_elements,
             const int num_eff_dims,
             const T* input, T* output,
             const gtl::ArraySlice<int64>& eff_threshold,
-            const gtl::ArraySlice<int64>& eff_range,
-            const gtl::ArraySlice<int64>& eff_size) {
-  auto work = [input, output, num_eff_dims, &eff_threshold, &eff_range, &eff_size](
+            const gtl::ArraySlice<int64>& eff_range) {
+  auto work = [input, output, num_eff_dims, &eff_threshold, &eff_range](
                   int64 start, int64 end) {
     // offset - the shift along the flattened tensor for current element
     int offset = 0;
-    gtl::InlinedVector<int, 4> indices(num_eff_dims);
     // initialize indices and offset
     for (int i = 0; i < num_eff_dims; i++) {
-      const int64 stride = (i+1 < num_eff_dims) ? eff_range[i+1] : 1;
-      indices[i] = (start / stride) % eff_size[i];
-      if (indices[i] < eff_threshold[i]) {
+      if (start % eff_range[i] < eff_threshold[i]) {
         // range - threshold = shift
-        offset += (eff_size[i] - eff_threshold[i]) * stride;
+        offset += eff_range[i] - eff_threshold[i];
       } else {
-        offset -= eff_threshold[i] * stride;
+        offset -= eff_threshold[i];
       }
     }
 
     for (int64 i = start; i < end; i++) {
       output[i+offset] = input[i];
-      for (int j = num_eff_dims-1; j >= 0; j--) {
-        indices[j] = (indices[j] + 1) % eff_size[j];
-        if (indices[j] != 0) {
-          if (indices[j] == eff_threshold[j]) {
+      for (int j = num_eff_dims - 1; j >= 0; j--) {
+        const int idx = (i + 1) % eff_range[j];
+        if (idx != 0) {
+          if (idx == eff_threshold[j]) {
             // we've reached the threshold
             // to wrap around our offset for this dimension needs to be
             // -threshold instead of +shift
@@ -124,10 +120,9 @@ void DoRollWithMemcpy(OpKernelContext* context, const int64 num_elements,
                       const int num_eff_dims,
                       const T* input, T* output,
                       const gtl::ArraySlice<int64>& eff_threshold,
-                      const gtl::ArraySlice<int64>& eff_range,
-                      const gtl::ArraySlice<int64>& eff_size) {
+                      const gtl::ArraySlice<int64>& eff_range) {
   const int isd = num_eff_dims - 1;
-  auto work = [input, output, num_eff_dims, &eff_threshold, &eff_range, &eff_size, isd](
+  auto work = [input, output, num_eff_dims, &eff_threshold, &eff_range, isd](
                   int64 start, int64 end) {
     // the number of indices over in the flattened tensor you need to skip in
     // order to make it over from one side of the isd to the other
@@ -148,25 +143,23 @@ void DoRollWithMemcpy(OpKernelContext* context, const int64 num_elements,
     in_ptr += start;
     out_ptr += start;
 
-    gtl::InlinedVector<int, 4> indices(num_eff_dims);
     // initialize indices
     for (int i = 0; i < num_eff_dims; i++) {
-      const int64 stride = (i+1 < num_eff_dims) ? eff_range[i+1] : 1;
-      indices[i] = (start / stride) % eff_size[i];
-      if (indices[i] < eff_threshold[i]) {
+      if (start % eff_range[i] < eff_threshold[i]) {
         // range - threshold = shift
-        out_ptr += (eff_size[i] - eff_threshold[i]) * stride;
+        out_ptr += eff_range[i] - eff_threshold[i];
       } else {
-        out_ptr -= eff_threshold[i] * stride;
+        out_ptr -= eff_threshold[i];
       }
     }
 
     // the size of the next group
     int64 group_size = 0;
     int64 i = start;
-    const int64 eff_shift_isd = eff_size[isd] - eff_threshold[isd];
+    const int64 eff_shift_isd = eff_range[isd] - eff_threshold[isd];
     while (i < end) {
-      if (indices[isd] < eff_threshold[isd]) {
+      const int64 i_mod_range = i % eff_range[isd];
+      if (i_mod_range < eff_threshold[isd]) {
         group_size = eff_threshold[isd];
       } else {
         group_size = eff_shift_isd;
@@ -179,11 +172,10 @@ void DoRollWithMemcpy(OpKernelContext* context, const int64 num_elements,
       out_ptr += group_size;
       in_ptr += group_size;
 
-      int increment = group_size;
       for (int j = isd; j >= 0; j--) {
-        indices[j] = (indices[j] + increment) % eff_size[j];
-        if (indices[j] != 0) {
-          if (indices[j] == eff_threshold[j]) {
+        const int idx = i % eff_range[j];
+        if (idx != 0) {
+          if (idx == eff_threshold[j]) {
             out_ptr -= eff_range[j];  // now wraps around
           }
           break; // idx != 0 don't need to carry
@@ -191,8 +183,8 @@ void DoRollWithMemcpy(OpKernelContext* context, const int64 num_elements,
           // idx became 0 so reverse wrap around
           out_ptr += eff_range[j];
         }
-        increment = 1;
       }
+      // i += group_size;
     }
   };
 // void DoRollWithMemcpy(OpKernelContext* context, const int64 num_elements,
@@ -487,15 +479,22 @@ class RollOp : public OpKernel {
 
       eff_range[last_idx] = dim_range[last_eff_dim];
       eff_size[last_idx] = dim_range[last_eff_dim];
-      eff_threshold[last_idx] = threshold[last_eff_dim];
-      eff_shift[last_idx] = dim_range[last_eff_dim] - threshold[last_eff_dim];
+      if (last_eff_dim+1 < num_dims) {
+        const int64 stride = dim_range[last_eff_dim+1];
+        eff_threshold[last_idx] = threshold[last_eff_dim] * stride;
+        eff_shift[last_idx] = dim_range[last_eff_dim] - eff_threshold[last_idx];
+      } else {
+        eff_threshold[last_idx] = threshold[last_eff_dim];
+        eff_shift[last_idx] = dim_range[last_eff_dim] - threshold[last_eff_dim];
+      }
 
       for (int i = num_eff_dims-2; i >= 0; --i) {
         size_t eff_dim = eff_dims[i];
         eff_range[i] = dim_range[eff_dim];
         eff_size[i] = eff_range[i] / eff_range[i+1];
-        eff_threshold[i] = threshold[eff_dim];
-        eff_shift[i] = eff_size[eff_dim] - eff_threshold[i];
+
+        eff_threshold[i] = threshold[eff_dim] * dim_range[eff_dim+1];
+        eff_shift[i] = dim_range[eff_dim] - eff_threshold[i];
       }
 
       // memcpy is faster when the contiguous block is size > 32
@@ -505,11 +504,11 @@ class RollOp : public OpKernel {
       if (DataTypeCanUseMemcpy(DataTypeToEnum<T>::v()) && preferMemcpy) {
         // copies memory in groups instead of element by element
         DoRollWithMemcpy<T>(context, num_elements, num_eff_dims,
-                  input_flat, output_flat, eff_threshold, eff_range, eff_size);
+                  input_flat, output_flat, eff_threshold, eff_range);
       } else {
         // in-case memcpy does not work for current data type or is slower
         DoRoll<T>(context, num_elements, num_eff_dims,
-                  input_flat, output_flat, eff_threshold, eff_range, eff_size);
+                  input_flat, output_flat, eff_threshold, eff_range);
       }
     }
   }
