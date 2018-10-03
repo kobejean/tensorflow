@@ -62,7 +62,7 @@ __global__ void RollKernelV2(CudaLaunchConfig config,
         const int indx = (indices[j] + 1) % eff_size[j];
         indices[j] = indx;
         if (indx != 0) {
-          if (indx == eff_size[j] - eff_shift[j]) {  // we've reached the threshold
+          if (i % eff_range[j] == eff_range[j] - eff_shift[j]) {  // we've reached the threshold
             // dim_range[j] = threshold[j] + shift[j]
             // offset = shift[j] + ... other offsets
             // offset - dim_range[j] = -threshold[j] + ... other offsets

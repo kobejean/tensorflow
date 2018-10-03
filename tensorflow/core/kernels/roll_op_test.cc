@@ -207,6 +207,28 @@ TEST_F(RollOpTest, Simple_ThreeD32_NoMemcpy) {
   test::ExpectTensorEqual<string>(expected, *GetOutput(0));
 }
 
+TEST_F(RollOpTest, Simple_FourD32) {
+  #ifdef GOOGLE_CUDA
+  MakeOp(Device::GPU, DT_FLOAT, DT_INT32);
+  #else
+  MakeOp(Device::CPU, DT_FLOAT, DT_INT32);
+  #endif  // GOOGLE_CUDA
+
+  // Feed and run
+  AddInputFromArray<float>(TensorShape({2, 2, 2, 2}),
+                           {0, 1, 2, 3, 4, 5, 6, 7,
+                            8, 9, 10, 11, 12, 13, 14, 15});
+  AddInputFromArray<int32>(TensorShape({4}), {1, -1, -1, 1});
+  AddInputFromArray<int32>(TensorShape({4}), {0, 1, 2, 3});
+  TF_ASSERT_OK(RunOpKernel());
+
+  // Check the output.
+  Tensor expected(allocator(), DT_FLOAT, TensorShape({2, 2, 2, 2}));
+  test::FillValues<float>(&expected, { 15, 14, 13, 12, 11, 10, 9,
+                                       8, 7, 6, 5, 4, 3, 2, 1, 0});
+  test::ExpectTensorEqual<float>(expected, *GetOutput(0));
+}
+
 TEST_F(RollOpTest, Simple_TwoD64) {
   #ifdef GOOGLE_CUDA
   MakeOp(Device::GPU, DT_FLOAT, DT_INT64);
@@ -589,16 +611,51 @@ static Graph* RollGraph(TensorShape& shape, int isd) {
       ->Arg(512)                                                              \
       ->Arg(1024)
 
+#define BM_ROLL_OUTER(DEVICE)                                                 \
+  static void BM_##DEVICE##_roll_outer(int iters, int rows, int columns) {    \
+    TensorShape shape{rows, columns};                                         \
+    const int64 num_items = static_cast<int64>(iters) * shape.num_elements(); \
+    testing::ItemsProcessed(num_items);                                       \
+    testing::BytesProcessed(num_items * sizeof(float));                       \
+    testing::UseRealTime();                                                   \
+    test::Benchmark(#DEVICE, RollGraph(shape, 0)).Run(iters);                 \
+  }                                                                           \
+  BENCHMARK(BM_##DEVICE##_roll_outer)                                         \
+      ->ArgPair(256, 256)                                                     \
+      ->ArgPair(512, 512)                                                     \
+      ->ArgPair(1024, 1024)                                                   \
+      ->ArgPair(2048, 2048)
+
+#define BM_ROLL_ALL(DEVICE)                                                   \
+  static void BM_##DEVICE##_roll_all(int iters, int rows, int columns) {      \
+    TensorShape shape{rows, columns};                                         \
+    const int64 num_items = static_cast<int64>(iters) * shape.num_elements(); \
+    testing::ItemsProcessed(num_items);                                       \
+    testing::BytesProcessed(num_items * sizeof(float));                       \
+    testing::UseRealTime();                                                   \
+    test::Benchmark(#DEVICE, RollGraph(shape, 1)).Run(iters);                 \
+  }                                                                           \
+  BENCHMARK(BM_##DEVICE##_roll_all)                                           \
+      ->ArgPair(256, 256)                                                     \
+      ->ArgPair(512, 512)                                                     \
+      ->ArgPair(1024, 1024)                                                   \
+      ->ArgPair(2048, 2048)
+
 BM_ROLL_VIDEO_CHANNELS(cpu);
 BM_ROLL_VIDEO_TIME(cpu);
 BM_ROLL_IMAGE_CHANNELS(cpu);
 BM_ROLL_IMAGE(cpu);
+BM_ROLL_OUTER(cpu);
+BM_ROLL_ALL(cpu);
 
 #ifdef GOOGLE_CUDA
 BM_ROLL_VIDEO_CHANNELS(gpu);
 BM_ROLL_VIDEO_TIME(gpu);
 BM_ROLL_IMAGE_CHANNELS(gpu);
 BM_ROLL_IMAGE(gpu);
+BM_ROLL_OUTER(gpu);
+BM_ROLL_ALL(gpu);
+
 #endif  // GOOGLE_CUDA
 }  // namespace
 }  // namespace tensorflow
