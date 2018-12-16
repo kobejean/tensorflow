@@ -52,8 +52,6 @@ typedef Eigen::GpuDevice GPUDevice;
 //     --------------------------------  < eff_range[1] == 12
 //    ------------------------------------------------------------------------
 //                                ^ eff_range[0] == 24
-// eff_size - the index for each dimension that the roll starts to wrap
-//    back to the front
 template <typename T>
 void DoRoll(OpKernelContext* context, const int64 num_elements,
             const int num_eff_dims,
@@ -107,12 +105,22 @@ void DoRoll(OpKernelContext* context, const int64 num_elements,
         cost_per_element, std::move(work));
 }
 
-// dim_size - the size of each dimension
-// dim_range - the number of indices over in the flattened tensor
-//    you need to skip in order to make it over from one side of a dimension
-//    to the other. Used to make the shifts wrap around after a threshold.
-// threshold - the index for each dimension that the roll starts to wrap
-//    back to the front
+// num_eff_dims - dimensions are reduced to the number of dimensions that are
+//    shifted plus the first dimension (0) regardless of whether it's shifted
+//    or not. Unused dimensions are flattend to their parent/outer dimension.
+//    num_eff_dims is the number of effective dimensions that were not reduced.
+// eff_shift - effective shift: the amount of shift in the flattened tensor
+//    for a given effective dimension.
+// eff_range - the number of indices in the flattened tensor that cover the
+//    given effective dimension. For example if you have a 3D tensor:
+//        v tensor with shape = [2,3,4]
+//    [[[x,x,x,x], [x,x,x,x], [x,x,x,x]],   [[x,x,x,x], [x,x,x,x], [x,x,x,x]]]
+//        v tensor flattened
+//    [  x,x,x,x,   x,x,x,x,   x,x,x,x,       x,x,x,x    x,x,x,x    x,x,x,x  ]
+//      --------- < eff_range[2] == 4
+//     --------------------------------  < eff_range[1] == 12
+//    ------------------------------------------------------------------------
+//                                ^ eff_range[0] == 24
 // isd - inner shift dimension
 template <typename T>
 // Use memcpy to copy memory in groups when the data type supports memcpy
@@ -184,120 +192,8 @@ void DoRollWithMemcpy(OpKernelContext* context, const int64 num_elements,
           out_ptr += eff_range[j];
         }
       }
-      // i += group_size;
     }
   };
-// void DoRollWithMemcpy(OpKernelContext* context, const int64 num_elements,
-//                       const int num_dims, const gtl::ArraySlice<int>& dim_size,
-//                       const T* input, T* output,
-//                       const gtl::ArraySlice<int>& threshold,
-//                       const gtl::ArraySlice<int64>& dim_range,
-//                       const int64 isd) {
-//   auto work = [input, output, num_dims, &dim_size, &threshold, &dim_range, isd](
-//                   int64 start, int64 end) {
-//     // the number of indices over in the flattened tensor you need to skip in
-//     // order to make it over from one side of the isd to the other
-//     const int64 isd_range = std::max<int>(dim_range[isd], 1);
-//     // the distance along the flattend tensor to the next element in the isd
-//     const int64 isd_stride = isd_range / std::max<int>(dim_size[isd], 1);
-//
-//     // start and end represent the i-th group currently so we will convert
-//     // them into numbers representing the i-th elements.
-//     // there are 2 groups per isd one for all elements before threshold[isd]
-//     // and another for all elements after threshold[isd].
-//     const int64 start_remainder = (start % 2) * threshold[isd] * isd_stride;
-//     const int64 end_remainder = (end % 2) * threshold[isd] * isd_stride;
-//     start = (start / 2) * isd_range + start_remainder;
-//     end = (end / 2) * isd_range + end_remainder;
-//
-//     const T* in_ptr = &input[0];
-//     T* out_ptr = &output[0];
-//     in_ptr += start;
-//     out_ptr += start;
-//
-//     // array of indices for each dimension
-//     // indicies = [i, j, k, l, m, n]
-//     gtl::InlinedVector<int, 4> indicies(num_dims);
-//     // the offset needed to make all inner non-shifting dimensions become 0
-//     int64 remainder_offset = 0;
-//     // initialize indicies
-//     for (int i = 0; i < num_dims; i++) {
-//       // stride is the number of indices over in the flattened tensor
-//       // you need to skip in order to make it over to an adjacent element
-//       // along a dimension. dim_size[i] != 0 because we set it to max(dim, 1)
-//       const int64 stride = dim_range[i] / dim_size[i];
-//       const int shift = dim_size[i] - threshold[i];
-//       const int indx = (start / stride) % dim_size[i];
-//       indicies[i] = indx;
-//       // calculate dimension index after the shift
-//       int out_indx = (indx + shift) % dim_size[i];
-//       if (i > isd) {
-//         // trailing zeroes for indices after the inner shifted dimension
-//         out_indx = 0;
-//         remainder_offset += (out_indx - indx) * stride;
-//       }
-//       out_ptr += (out_indx - indx) * stride;
-//     }
-//     // set trailing zeroes for indices after the inner shifted dimension
-//     for (int i = num_dims - 1; i > isd; i--) indicies[i] = 0;
-//
-//     // the number of indices in the isd dimension the next group will skip
-//     // to make it to the next threshold or end point
-//     int isd_indx_skip = 0;
-//     // the size of the next group
-//     int64 group_size = 0;
-//     // initialize isd_indx_skip and group_size
-//     if (indicies[isd] < threshold[isd]) {
-//       isd_indx_skip = threshold[isd] - indicies[isd];
-//       group_size = isd_indx_skip * isd_stride + remainder_offset;
-//     } else {
-//       isd_indx_skip = dim_size[isd] - indicies[isd];
-//       group_size = isd_indx_skip * isd_stride + remainder_offset;
-//     }
-//
-//     int64 i = start;
-//     while (i < end) {
-//       // copy group of elements
-//       memcpy(out_ptr, in_ptr, group_size * sizeof(T));
-//
-//       // shift i and the pointers over to the next group position
-//       i += group_size;
-//       out_ptr += group_size;
-//       in_ptr += group_size;
-//
-//       // produce next combination of indices and adjust the out_ptr position
-//       // to fix the offset if necessary
-//       // the isd (inner shift dim) should skip to next threshold or endpoint
-//       // all dimensions to the left increment by 1 when a digit is carried
-//       // all dimensions to the right remain set to 0
-//       //            +1 +1 +1 +isd_indx_skip
-//       // indicies = [i, j, k, l, 0, 0]
-//       //                      ^isd
-//       for (int j = isd; j >= 0; j--) {
-//         int inc = 1;
-//         if (j == isd) inc = isd_indx_skip;
-//         const int indx = (indicies[j] + inc) % dim_size[j];
-//         indicies[j] = indx;
-//         if (indx != 0) {
-//           if (indx == threshold[j]) {
-//             out_ptr -= dim_range[j];  // now wraps around
-//           }
-//           break;                         // indx != 0 don't need to carry
-//         } else if (threshold[j] != 0) {  // if threshold is 0 shift is 0
-//           out_ptr += dim_range[j];       // indx became 0 so reverse wrap around
-//         }
-//       }
-//
-//       // set isd_indx_skip and group_size for next iteration
-//       if (indicies[isd] < threshold[isd]) {
-//         isd_indx_skip = threshold[isd] - indicies[isd];
-//         group_size = isd_indx_skip * isd_stride;
-//       } else {
-//         isd_indx_skip = dim_size[isd] - indicies[isd];
-//         group_size = isd_indx_skip * isd_stride;
-//       }
-//     }
-//   };
   // Shard
   auto worker_threads = context->device()->tensorflow_cpu_worker_threads();
   const int64 group_size = eff_range[isd];
@@ -370,10 +266,7 @@ class RollOp : public OpKernel {
     // to the other. Used to make the shifts wrap around after a threshold.
     gtl::InlinedVector<int64, 4> dim_range(num_dims);
     int64 dim_size_prod = 1;  // dimension size product
-    // inner shift dimension (inner most shifted dimension)
-    int64 isd = 0;
     for (int i = num_dims - 1; i >= 0; i--) {
-      if (isd == 0 && shift_mod_sum[i] != 0) isd = i;
       const int ds = std::max<int32>(static_cast<int32>(input.dim_size(i)), 1);
       dim_size[i] = ds;
       threshold[i] = (ds - shift_mod_sum[i]) % ds;
@@ -412,7 +305,7 @@ class RollOp : public OpKernel {
         // search after the previous effective dimension
         size_t j = eff_dims[i-1] + 1;
         // when threshold[j] == 0, there is no shift, so skip this dimension
-        while (threshold[j] == 0 && j < num_eff_dims) {
+        while (threshold[j] == 0 && j < num_dims) {
           j++;
         }
         eff_dims[i] = j;
@@ -455,52 +348,35 @@ class RollOp : public OpKernel {
       // outer shifted dimensions.
       // num_eff_dims = number of efective dimensions
       // eff_dims = array of original indicies of effective dimensions
-      gtl::InlinedVector<int, 4> eff_dims(num_eff_dims);
-      // always keeping the fist dimension regardless of whether it's shifted
-      eff_dims[0] = 0;
-      for (size_t i = 1; i < num_eff_dims; i++) {
-        // search after the previous effective dimension
-        size_t j = eff_dims[i-1] + 1;
-        // when threshold[j] == 0, there is no shift, so skip this dimension
-        while (threshold[j] == 0 && j < num_eff_dims) {
-          j++;
-        }
-        eff_dims[i] = j;
-      }
       // eff_shift = effective shift - the amount elements will shift in the
       // flattend tensor for a given effective dimension.
-      gtl::InlinedVector<int64, 4> eff_shift(num_eff_dims);
       gtl::InlinedVector<int64, 4> eff_range(num_eff_dims);
       gtl::InlinedVector<int64, 4> eff_size(num_eff_dims);
       gtl::InlinedVector<int64, 4> eff_threshold(num_eff_dims);
-
-      size_t last_idx = (num_eff_dims-1 > 0) ? num_eff_dims-1 : 0;
-      size_t last_eff_dim = eff_dims[last_idx];
-
-      eff_range[last_idx] = dim_range[last_eff_dim];
-      eff_size[last_idx] = dim_range[last_eff_dim];
-      if (last_eff_dim+1 < num_dims) {
-        const int64 stride = dim_range[last_eff_dim+1];
-        eff_threshold[last_idx] = threshold[last_eff_dim] * stride;
-        eff_shift[last_idx] = dim_range[last_eff_dim] - eff_threshold[last_idx];
-      } else {
-        eff_threshold[last_idx] = threshold[last_eff_dim];
-        eff_shift[last_idx] = dim_range[last_eff_dim] - threshold[last_eff_dim];
+      for (int i = 0; i < num_eff_dims; i++) {
+        eff_size[i] = 1;
+        eff_range[i] = 1;
+        eff_threshold[i] = 1;
       }
 
-      for (int i = num_eff_dims-2; i >= 0; --i) {
-        size_t eff_dim = eff_dims[i];
-        eff_range[i] = dim_range[eff_dim];
-        eff_size[i] = eff_range[i] / eff_range[i+1];
-
-        eff_threshold[i] = threshold[eff_dim] * dim_range[eff_dim+1];
-        eff_shift[i] = dim_range[eff_dim] - eff_threshold[i];
+      int64 stride = 1;
+      size_t j = num_eff_dims - 1;
+      for (int i = num_dims - 1; i >= 0; i--) {
+        const int size = std::max<int>(input.dim_size(i), 1);
+        eff_size[j] *= size;
+        if (shift_mod_sum[i] != 0 || i == 0) {
+          const int threshold = ((size - shift_mod_sum[i]) % size);
+          eff_threshold[j] = stride * threshold;
+          eff_range[j] = size * stride;
+          j--;
+        }
+        stride *= static_cast<int64>(input.dim_size(i));
       }
 
       // memcpy is faster when the contiguous block is size > 32
       // when num_elements < 64 time doesn't matter so much
       // and our test cases can test this algorithm
-      bool preferMemcpy = dim_range[isd] > 32 || num_elements < 64;
+      bool preferMemcpy = eff_range[num_eff_dims-1] > 32 || num_elements < 64;
       if (DataTypeCanUseMemcpy(DataTypeToEnum<T>::v()) && preferMemcpy) {
         // copies memory in groups instead of element by element
         DoRollWithMemcpy<T>(context, num_elements, num_eff_dims,
